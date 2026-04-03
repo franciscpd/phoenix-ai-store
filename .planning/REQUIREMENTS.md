@@ -118,60 +118,62 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STOR-01 | — | Pending |
-| STOR-02 | — | Pending |
-| STOR-03 | — | Pending |
-| STOR-04 | — | Pending |
-| STOR-05 | — | Pending |
-| STOR-06 | — | Pending |
-| STOR-07 | — | Pending |
-| MEM-01 | — | Pending |
-| MEM-02 | — | Pending |
-| MEM-03 | — | Pending |
-| MEM-04 | — | Pending |
-| MEM-05 | — | Pending |
-| MEM-06 | — | Pending |
-| MEM-07 | — | Pending |
-| LTM-01 | — | Pending |
-| LTM-02 | — | Pending |
-| LTM-03 | — | Pending |
-| LTM-04 | — | Pending |
-| LTM-05 | — | Pending |
-| GUARD-01 | — | Pending |
-| GUARD-02 | — | Pending |
-| GUARD-03 | — | Pending |
-| GUARD-04 | — | Pending |
-| GUARD-05 | — | Pending |
-| GUARD-06 | — | Pending |
-| GUARD-07 | — | Pending |
-| GUARD-08 | — | Pending |
-| GUARD-09 | — | Pending |
-| GUARD-10 | — | Pending |
-| COST-01 | — | Pending |
-| COST-02 | — | Pending |
-| COST-03 | — | Pending |
-| COST-04 | — | Pending |
-| COST-05 | — | Pending |
-| COST-06 | — | Pending |
-| COST-07 | — | Pending |
-| COST-08 | — | Pending |
-| EVNT-01 | — | Pending |
-| EVNT-02 | — | Pending |
-| EVNT-03 | — | Pending |
-| EVNT-04 | — | Pending |
-| EVNT-05 | — | Pending |
-| INTG-01 | — | Pending |
-| INTG-02 | — | Pending |
-| INTG-03 | — | Pending |
-| INTG-04 | — | Pending |
-| INTG-05 | — | Pending |
-| INTG-06 | — | Pending |
+| STOR-01 | Phase 1 | Pending |
+| STOR-02 | Phase 1 | Pending |
+| STOR-03 | Phase 1 | Pending |
+| STOR-04 | Phase 1 | Pending |
+| STOR-05 | Phase 1 | Pending |
+| STOR-06 | Phase 2 | Pending |
+| STOR-07 | Phase 2 | Pending |
+| MEM-01 | Phase 3 | Pending |
+| MEM-02 | Phase 3 | Pending |
+| MEM-03 | Phase 3 | Pending |
+| MEM-04 | Phase 3 | Pending |
+| MEM-05 | Phase 3 | Pending |
+| MEM-06 | Phase 3 | Pending |
+| MEM-07 | Phase 3 | Pending |
+| LTM-01 | Phase 4 | Pending |
+| LTM-02 | Phase 4 | Pending |
+| LTM-03 | Phase 4 | Pending |
+| LTM-04 | Phase 4 | Pending |
+| LTM-05 | Phase 4 | Pending |
+| GUARD-01 | Phase 5 | Pending |
+| GUARD-02 | Phase 6 | Pending |
+| GUARD-03 | Phase 5 | Pending |
+| GUARD-04 | Phase 5 | Pending |
+| GUARD-05 | Phase 5 | Pending |
+| GUARD-06 | Phase 5 | Pending |
+| GUARD-07 | Phase 5 | Pending |
+| GUARD-08 | Phase 5 | Pending |
+| GUARD-09 | Phase 5 | Pending |
+| GUARD-10 | Phase 5 | Pending |
+| COST-01 | Phase 6 | Pending |
+| COST-02 | Phase 6 | Pending |
+| COST-03 | Phase 6 | Pending |
+| COST-04 | Phase 6 | Pending |
+| COST-05 | Phase 6 | Pending |
+| COST-06 | Phase 6 | Pending |
+| COST-07 | Phase 6 | Pending |
+| COST-08 | Phase 6 | Pending |
+| EVNT-01 | Phase 7 | Pending |
+| EVNT-02 | Phase 7 | Pending |
+| EVNT-03 | Phase 7 | Pending |
+| EVNT-04 | Phase 7 | Pending |
+| EVNT-05 | Phase 7 | Pending |
+| INTG-01 | Phase 8 | Pending |
+| INTG-02 | Phase 8 | Pending |
+| INTG-03 | Phase 8 | Pending |
+| INTG-04 | Phase 8 | Pending |
+| INTG-05 | Phase 1 | Pending |
+| INTG-06 | Phase 8 | Pending |
 
 **Coverage:**
-- v1 requirements: 46 total
-- Mapped to phases: 0
-- Unmapped: 46
+- v1 requirements: 48 total (STOR×7, MEM×7, LTM×5, GUARD×10, COST×8, EVNT×5, INTG×6)
+- Mapped to phases: 48
+- Unmapped: 0
+
+**Note:** The original traceability table listed "46 total" but the enumerated requirements count to 48. All 48 are mapped above.
 
 ---
 *Requirements defined: 2026-04-03*
-*Last updated: 2026-04-03 after initial definition*
+*Last updated: 2026-04-03 after roadmap creation — all requirements mapped*
