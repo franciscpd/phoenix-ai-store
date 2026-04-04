@@ -57,16 +57,24 @@ defmodule PhoenixAI.Store do
   @spec save_conversation(Conversation.t(), keyword()) ::
           {:ok, Conversation.t()} | {:error, term()}
   def save_conversation(%Conversation{} = conv, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    now = DateTime.utc_now()
+    :telemetry.span([:phoenix_ai_store, :conversation, :save], %{}, fn ->
+      {adapter, adapter_opts, config} = resolve_adapter(opts)
 
-    conv =
-      conv
-      |> maybe_generate_id()
-      |> maybe_set_inserted_at(now)
-      |> Map.put(:updated_at, now)
+      if config[:user_id_required] && is_nil(conv.user_id) do
+        {{:error, :user_id_required}, %{}}
+      else
+        now = DateTime.utc_now()
 
-    adapter.save_conversation(conv, adapter_opts)
+        conv =
+          conv
+          |> maybe_generate_id()
+          |> maybe_set_inserted_at(now)
+          |> Map.put(:updated_at, now)
+
+        result = adapter.save_conversation(conv, adapter_opts)
+        {result, %{}}
+      end
+    end)
   end
 
   @doc """
@@ -75,8 +83,21 @@ defmodule PhoenixAI.Store do
   @spec load_conversation(String.t(), keyword()) ::
           {:ok, Conversation.t()} | {:error, :not_found | term()}
   def load_conversation(id, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    adapter.load_conversation(id, adapter_opts)
+    :telemetry.span([:phoenix_ai_store, :conversation, :load], %{}, fn ->
+      {adapter, adapter_opts, config} = resolve_adapter(opts)
+
+      result = adapter.load_conversation(id, adapter_opts)
+
+      result =
+        with {:ok, %{deleted_at: deleted_at}} when not is_nil(deleted_at) <- result,
+             true <- config[:soft_delete] do
+          {:error, :not_found}
+        else
+          _ -> result
+        end
+
+      {result, %{}}
+    end)
   end
 
   @doc """
@@ -85,8 +106,17 @@ defmodule PhoenixAI.Store do
   @spec list_conversations(keyword(), keyword()) ::
           {:ok, [Conversation.t()]} | {:error, term()}
   def list_conversations(filters \\ [], opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    adapter.list_conversations(filters, adapter_opts)
+    :telemetry.span([:phoenix_ai_store, :conversation, :list], %{}, fn ->
+      {adapter, adapter_opts, config} = resolve_adapter(opts)
+
+      filters =
+        if config[:soft_delete],
+          do: Keyword.put_new(filters, :exclude_deleted, true),
+          else: filters
+
+      result = adapter.list_conversations(filters, adapter_opts)
+      {result, %{}}
+    end)
   end
 
   @doc """
@@ -94,8 +124,28 @@ defmodule PhoenixAI.Store do
   """
   @spec delete_conversation(String.t(), keyword()) :: :ok | {:error, :not_found | term()}
   def delete_conversation(id, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    adapter.delete_conversation(id, adapter_opts)
+    :telemetry.span([:phoenix_ai_store, :conversation, :delete], %{}, fn ->
+      {adapter, adapter_opts, config} = resolve_adapter(opts)
+
+      result =
+        if config[:soft_delete] do
+          case adapter.load_conversation(id, adapter_opts) do
+            {:ok, conv} ->
+              adapter.save_conversation(%{conv | deleted_at: DateTime.utc_now()}, adapter_opts)
+              |> case do
+                {:ok, _} -> :ok
+                error -> error
+              end
+
+            {:error, _} = error ->
+              error
+          end
+        else
+          adapter.delete_conversation(id, adapter_opts)
+        end
+
+      {result, %{}}
+    end)
   end
 
   @doc """
@@ -104,8 +154,17 @@ defmodule PhoenixAI.Store do
   @spec count_conversations(keyword(), keyword()) ::
           {:ok, non_neg_integer()} | {:error, term()}
   def count_conversations(filters \\ [], opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    adapter.count_conversations(filters, adapter_opts)
+    :telemetry.span([:phoenix_ai_store, :conversation, :count], %{}, fn ->
+      {adapter, adapter_opts, config} = resolve_adapter(opts)
+
+      filters =
+        if config[:soft_delete],
+          do: Keyword.put_new(filters, :exclude_deleted, true),
+          else: filters
+
+      result = adapter.count_conversations(filters, adapter_opts)
+      {result, %{}}
+    end)
   end
 
   @doc """
@@ -114,8 +173,11 @@ defmodule PhoenixAI.Store do
   @spec conversation_exists?(String.t(), keyword()) ::
           {:ok, boolean()} | {:error, term()}
   def conversation_exists?(id, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    adapter.conversation_exists?(id, adapter_opts)
+    :telemetry.span([:phoenix_ai_store, :conversation, :exists], %{}, fn ->
+      {adapter, adapter_opts, _config} = resolve_adapter(opts)
+      result = adapter.conversation_exists?(id, adapter_opts)
+      {result, %{}}
+    end)
   end
 
   @doc """
@@ -125,14 +187,18 @@ defmodule PhoenixAI.Store do
   @spec add_message(String.t(), Message.t(), keyword()) ::
           {:ok, Message.t()} | {:error, term()}
   def add_message(conversation_id, %Message{} = msg, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
+    :telemetry.span([:phoenix_ai_store, :message, :add], %{}, fn ->
+      {adapter, adapter_opts, _config} = resolve_adapter(opts)
 
-    msg =
-      msg
-      |> maybe_generate_id()
-      |> maybe_set_inserted_at(DateTime.utc_now())
+      msg =
+        msg
+        |> maybe_generate_id()
+        |> maybe_set_inserted_at(DateTime.utc_now())
+        |> Map.put(:conversation_id, conversation_id)
 
-    adapter.add_message(conversation_id, msg, adapter_opts)
+      result = adapter.add_message(conversation_id, msg, adapter_opts)
+      {result, %{}}
+    end)
   end
 
   @doc """
@@ -141,8 +207,11 @@ defmodule PhoenixAI.Store do
   @spec get_messages(String.t(), keyword()) ::
           {:ok, [Message.t()]} | {:error, term()}
   def get_messages(conversation_id, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    adapter.get_messages(conversation_id, adapter_opts)
+    :telemetry.span([:phoenix_ai_store, :message, :get], %{}, fn ->
+      {adapter, adapter_opts, _config} = resolve_adapter(opts)
+      result = adapter.get_messages(conversation_id, adapter_opts)
+      {result, %{}}
+    end)
   end
 
   # -- Private Helpers --
@@ -151,7 +220,7 @@ defmodule PhoenixAI.Store do
     store = Keyword.get(opts, :store, :phoenix_ai_store_default)
     config = Instance.get_config(store)
     adapter_opts = Instance.get_adapter_opts(store)
-    {config[:adapter], adapter_opts}
+    {config[:adapter], adapter_opts, config}
   end
 
   defp maybe_generate_id(%{id: nil} = struct) do

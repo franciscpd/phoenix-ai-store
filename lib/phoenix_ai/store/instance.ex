@@ -35,7 +35,12 @@ defmodule PhoenixAI.Store.Instance do
 
   @impl true
   def init(opts) do
-    config = Config.resolve(opts)
+    # Skip validation if already resolved by PhoenixAI.Store.start_link/1
+    config =
+      if Keyword.has_key?(opts, :prefix),
+        do: opts,
+        else: Config.resolve(opts)
+
     adapter_opts = build_adapter_opts(config)
     {:ok, %{config: config, adapter_opts: adapter_opts}}
   end

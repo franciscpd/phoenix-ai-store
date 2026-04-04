@@ -23,10 +23,19 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     conversation =
       case :ets.lookup(table, {:conversation, conversation.id}) do
         [{_key, existing}] ->
-          %{conversation | inserted_at: existing.inserted_at, updated_at: now}
+          # Preserve original inserted_at on upsert
+          %{
+            conversation
+            | inserted_at: existing.inserted_at,
+              updated_at: conversation.updated_at || now
+          }
 
         [] ->
-          %{conversation | inserted_at: conversation.inserted_at || now, updated_at: now}
+          %{
+            conversation
+            | inserted_at: conversation.inserted_at || now,
+              updated_at: conversation.updated_at || now
+          }
       end
 
     :ets.insert(table, {{:conversation, conversation.id}, conversation})
@@ -56,6 +65,9 @@ defmodule PhoenixAI.Store.Adapters.ETS do
       |> Enum.map(fn {_key, conv} -> conv end)
       |> filter_by_user_id(Keyword.get(filters, :user_id))
       |> filter_by_tags(Keyword.get(filters, :tags))
+      |> filter_by_date_after(Keyword.get(filters, :inserted_after))
+      |> filter_by_date_before(Keyword.get(filters, :inserted_before))
+      |> filter_by_exclude_deleted(Keyword.get(filters, :exclude_deleted, false))
       |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
       |> maybe_offset(Keyword.get(filters, :offset))
       |> maybe_limit(Keyword.get(filters, :limit))
@@ -83,6 +95,8 @@ defmodule PhoenixAI.Store.Adapters.ETS do
   end
 
   @impl true
+  # NOTE: O(n) — materializes the full filtered list then counts.
+  # Acceptable for dev/test adapter. For production, use the Ecto adapter.
   def count_conversations(filters, opts) do
     {:ok, conversations} = list_conversations(filters, opts)
     {:ok, length(conversations)}
@@ -104,11 +118,12 @@ defmodule PhoenixAI.Store.Adapters.ETS do
 
     case :ets.lookup(table, {:conversation, conversation_id}) do
       [{_key, _conv}] ->
+        # Respect values already set by facade; only fill in defaults for nil fields
         message = %{
           message
-          | id: Uniq.UUID.uuid7(),
+          | id: message.id || Uniq.UUID.uuid7(),
             conversation_id: conversation_id,
-            inserted_at: DateTime.utc_now()
+            inserted_at: message.inserted_at || DateTime.utc_now()
         }
 
         :ets.insert(table, {{:message, conversation_id, message.id}, message})
@@ -145,6 +160,24 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     Enum.filter(conversations, fn conv ->
       Enum.all?(tags, &(&1 in conv.tags))
     end)
+  end
+
+  defp filter_by_date_after(conversations, nil), do: conversations
+
+  defp filter_by_date_after(conversations, dt) do
+    Enum.filter(conversations, &(DateTime.compare(&1.inserted_at, dt) in [:gt, :eq]))
+  end
+
+  defp filter_by_date_before(conversations, nil), do: conversations
+
+  defp filter_by_date_before(conversations, dt) do
+    Enum.filter(conversations, &(DateTime.compare(&1.inserted_at, dt) in [:lt, :eq]))
+  end
+
+  defp filter_by_exclude_deleted(conversations, false), do: conversations
+
+  defp filter_by_exclude_deleted(conversations, true) do
+    Enum.filter(conversations, &is_nil(&1.deleted_at))
   end
 
   defp maybe_offset(conversations, nil), do: conversations

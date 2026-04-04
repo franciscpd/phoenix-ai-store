@@ -22,9 +22,10 @@ if Code.ensure_loaded?(Ecto) do
       repo = Keyword.fetch!(opts, :repo)
       attrs = ConvSchema.from_store_struct(conversation)
 
-      case repo.get(ConvSchema, conversation.id) do
+      case repo.one(from(c in conv_source(opts), where: c.id == ^conversation.id)) do
         nil ->
           %ConvSchema{}
+          |> Ecto.put_meta(source: conv_table_name(opts))
           |> ConvSchema.changeset(attrs)
           |> repo.insert()
           |> handle_conv_result()
@@ -46,9 +47,9 @@ if Code.ensure_loaded?(Ecto) do
       repo = Keyword.fetch!(opts, :repo)
 
       query =
-        from c in ConvSchema,
+        from c in conv_source(opts),
           where: c.id == ^id,
-          preload: [messages: ^from(m in MsgSchema, order_by: [asc: m.inserted_at])]
+          preload: [messages: ^from(m in msg_source(opts), order_by: [asc: m.inserted_at])]
 
       case repo.one(query) do
         nil -> {:error, :not_found}
@@ -61,7 +62,7 @@ if Code.ensure_loaded?(Ecto) do
       repo = Keyword.fetch!(opts, :repo)
 
       query =
-        from(c in ConvSchema, order_by: [desc: c.inserted_at])
+        from(c in conv_source(opts), order_by: [desc: c.inserted_at])
         |> apply_filters(filters)
 
       conversations =
@@ -79,7 +80,7 @@ if Code.ensure_loaded?(Ecto) do
     defp do_delete_conversation(id, opts) do
       repo = Keyword.fetch!(opts, :repo)
 
-      case repo.get(ConvSchema, id) do
+      case repo.one(from(c in conv_source(opts), where: c.id == ^id)) do
         nil -> {:error, :not_found}
         schema -> repo.delete(schema) |> handle_delete_result()
       end
@@ -90,7 +91,7 @@ if Code.ensure_loaded?(Ecto) do
       repo = Keyword.fetch!(opts, :repo)
 
       query =
-        from(c in ConvSchema, select: count(c.id))
+        from(c in conv_source(opts), select: count(c.id))
         |> apply_filters(filters)
 
       {:ok, repo.one(query)}
@@ -103,7 +104,7 @@ if Code.ensure_loaded?(Ecto) do
 
     defp do_conversation_exists?(id, opts) do
       repo = Keyword.fetch!(opts, :repo)
-      {:ok, repo.exists?(from(c in ConvSchema, where: c.id == ^id))}
+      {:ok, repo.exists?(from(c in conv_source(opts), where: c.id == ^id))}
     end
 
     @impl true
@@ -118,13 +119,14 @@ if Code.ensure_loaded?(Ecto) do
     defp do_add_message(conversation_id, message, opts) do
       repo = Keyword.fetch!(opts, :repo)
 
-      if repo.exists?(from(c in ConvSchema, where: c.id == ^conversation_id)) do
+      if repo.exists?(from(c in conv_source(opts), where: c.id == ^conversation_id)) do
         attrs =
           MsgSchema.from_store_struct(message)
-          |> Map.put(:id, Uniq.UUID.uuid7())
+          |> Map.update(:id, Uniq.UUID.uuid7(), fn id -> id || Uniq.UUID.uuid7() end)
           |> Map.put(:conversation_id, conversation_id)
 
         %MsgSchema{}
+        |> Ecto.put_meta(source: msg_table_name(opts))
         |> MsgSchema.changeset(attrs)
         |> repo.insert()
         |> handle_msg_result()
@@ -144,7 +146,7 @@ if Code.ensure_loaded?(Ecto) do
       repo = Keyword.fetch!(opts, :repo)
 
       messages =
-        from(m in MsgSchema,
+        from(m in msg_source(opts),
           where: m.conversation_id == ^conversation_id,
           order_by: [asc: m.inserted_at]
         )
@@ -182,7 +184,41 @@ if Code.ensure_loaded?(Ecto) do
       |> apply_filters(rest)
     end
 
+    defp apply_filters(query, [{:inserted_after, dt} | rest]) do
+      query
+      |> where([c], c.inserted_at >= ^dt)
+      |> apply_filters(rest)
+    end
+
+    defp apply_filters(query, [{:inserted_before, dt} | rest]) do
+      query
+      |> where([c], c.inserted_at <= ^dt)
+      |> apply_filters(rest)
+    end
+
+    defp apply_filters(query, [{:exclude_deleted, true} | rest]) do
+      query
+      |> where([c], is_nil(c.deleted_at))
+      |> apply_filters(rest)
+    end
+
     defp apply_filters(query, [_ | rest]), do: apply_filters(query, rest)
+
+    defp conv_source(opts) do
+      {conv_table_name(opts), ConvSchema}
+    end
+
+    defp msg_source(opts) do
+      {msg_table_name(opts), MsgSchema}
+    end
+
+    defp conv_table_name(opts) do
+      Keyword.get(opts, :prefix, "phoenix_ai_store_") <> "conversations"
+    end
+
+    defp msg_table_name(opts) do
+      Keyword.get(opts, :prefix, "phoenix_ai_store_") <> "messages"
+    end
 
     defp handle_conv_result({:ok, schema}), do: {:ok, ConvSchema.to_store_struct(schema)}
     defp handle_conv_result({:error, changeset}), do: {:error, changeset}
