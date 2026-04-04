@@ -33,7 +33,7 @@ defmodule PhoenixAI.Store.MixProject do
 
   defp deps do
     [
-      {:phoenix_ai, "~> 0.1"},
+      {:phoenix_ai, "~> 0.2"},
       {:jason, "~> 1.4"},
       {:nimble_options, "~> 1.1"},
       {:telemetry, "~> 1.3"},
