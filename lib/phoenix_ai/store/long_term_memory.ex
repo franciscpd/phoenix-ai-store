@@ -14,54 +14,58 @@ defmodule PhoenixAI.Store.LongTermMemory do
 
   @spec save_fact(Fact.t(), keyword()) :: {:ok, Fact.t()} | {:error, term()}
   def save_fact(%Fact{} = fact, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    check_fact_store!(adapter)
-    adapter.save_fact(fact, adapter_opts)
+    with {:ok, adapter, adapter_opts} <- resolve_fact_store(opts) do
+      adapter.save_fact(fact, adapter_opts)
+    end
   end
 
   @spec get_facts(String.t(), keyword()) :: {:ok, [Fact.t()]} | {:error, term()}
   def get_facts(user_id, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    check_fact_store!(adapter)
-    adapter.get_facts(user_id, adapter_opts)
+    with {:ok, adapter, adapter_opts} <- resolve_fact_store(opts) do
+      adapter.get_facts(user_id, adapter_opts)
+    end
   end
 
   @spec delete_fact(String.t(), String.t(), keyword()) :: :ok | {:error, term()}
   def delete_fact(user_id, key, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    check_fact_store!(adapter)
-    adapter.delete_fact(user_id, key, adapter_opts)
+    with {:ok, adapter, adapter_opts} <- resolve_fact_store(opts) do
+      adapter.delete_fact(user_id, key, adapter_opts)
+    end
   end
 
   # -- Manual CRUD: Profiles --
 
   @spec save_profile(Profile.t(), keyword()) :: {:ok, Profile.t()} | {:error, term()}
   def save_profile(%Profile{} = profile, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    check_profile_store!(adapter)
-    adapter.save_profile(profile, adapter_opts)
+    with {:ok, adapter, adapter_opts} <- resolve_profile_store(opts) do
+      adapter.save_profile(profile, adapter_opts)
+    end
   end
 
   @spec get_profile(String.t(), keyword()) :: {:ok, Profile.t()} | {:error, :not_found | term()}
   def get_profile(user_id, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    check_profile_store!(adapter)
-    adapter.load_profile(user_id, adapter_opts)
+    with {:ok, adapter, adapter_opts} <- resolve_profile_store(opts) do
+      adapter.load_profile(user_id, adapter_opts)
+    end
   end
 
   @spec delete_profile(String.t(), keyword()) :: :ok | {:error, term()}
   def delete_profile(user_id, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    check_profile_store!(adapter)
-    adapter.delete_profile(user_id, adapter_opts)
+    with {:ok, adapter, adapter_opts} <- resolve_profile_store(opts) do
+      adapter.delete_profile(user_id, adapter_opts)
+    end
   end
 
   # -- Extraction --
 
   @spec extract_facts(String.t(), keyword()) :: {:ok, [Fact.t()]} | {:error, term()}
   def extract_facts(conversation_id, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    check_fact_store!(adapter)
+    with {:ok, adapter, adapter_opts} <- resolve_fact_store(opts) do
+      do_extract_facts(conversation_id, adapter, adapter_opts, opts)
+    end
+  end
+
+  defp do_extract_facts(conversation_id, adapter, adapter_opts, opts) do
 
     with {:ok, conv} <- adapter.load_conversation(conversation_id, adapter_opts),
          {:ok, all_messages} <- adapter.get_messages(conversation_id, adapter_opts) do
@@ -103,21 +107,31 @@ defmodule PhoenixAI.Store.LongTermMemory do
 
   defp save_extracted_facts(raw_facts, user_id, adapter, adapter_opts, opts) do
     max_facts = Keyword.get(opts, :max_facts_per_user, 100)
+    {:ok, existing_count} = adapter.count_facts(user_id, adapter_opts)
+    {:ok, existing_facts} = adapter.get_facts(user_id, adapter_opts)
+    existing_keys = MapSet.new(existing_facts, & &1.key)
 
-    Enum.reduce(raw_facts, [], fn %{key: key, value: value}, acc ->
-      {:ok, count} = adapter.count_facts(user_id, adapter_opts)
+    {saved, _count} =
+      Enum.reduce(raw_facts, {[], existing_count}, fn %{key: key, value: value}, {acc, count} ->
+        is_upsert = MapSet.member?(existing_keys, key)
 
-      if count >= max_facts do
-        acc
-      else
-        fact = %Fact{user_id: user_id, key: key, value: value}
+        if not is_upsert and count >= max_facts do
+          {acc, count}
+        else
+          fact = %Fact{user_id: user_id, key: key, value: value}
 
-        case adapter.save_fact(fact, adapter_opts) do
-          {:ok, saved} -> acc ++ [saved]
-          {:error, _} -> acc
+          case adapter.save_fact(fact, adapter_opts) do
+            {:ok, saved} ->
+              new_count = if is_upsert, do: count, else: count + 1
+              {[saved | acc], new_count}
+
+            {:error, _} ->
+              {acc, count}
+          end
         end
-      end
-    end)
+      end)
+
+    Enum.reverse(saved)
   end
 
   defp update_cursor(conv, messages, adapter, adapter_opts) do
@@ -134,9 +148,13 @@ defmodule PhoenixAI.Store.LongTermMemory do
 
   @spec update_profile(String.t(), keyword()) :: {:ok, Profile.t()} | {:error, term()}
   def update_profile(user_id, opts \\ []) do
-    {adapter, adapter_opts} = resolve_adapter(opts)
-    check_profile_store!(adapter)
-    check_fact_store!(adapter)
+    with {:ok, adapter, adapter_opts} <- resolve_profile_store(opts),
+         {:ok, _, _} <- resolve_fact_store(opts) do
+      do_update_profile_impl(user_id, adapter, adapter_opts, opts)
+    end
+  end
+
+  defp do_update_profile_impl(user_id, adapter, adapter_opts, opts) do
 
     existing_profile =
       case adapter.load_profile(user_id, adapter_opts) do
@@ -243,23 +261,25 @@ defmodule PhoenixAI.Store.LongTermMemory do
     {config[:adapter], adapter_opts}
   end
 
-  defp check_fact_store!(adapter) do
+  defp resolve_fact_store(opts) do
+    {adapter, adapter_opts} = resolve_adapter(opts)
     Code.ensure_loaded(adapter)
 
-    unless function_exported?(adapter, :save_fact, 2) do
-      raise ArgumentError,
-            "Adapter #{inspect(adapter)} does not implement PhoenixAI.Store.Adapter.FactStore. " <>
-              "Long-term memory requires an adapter that supports fact storage."
+    if function_exported?(adapter, :save_fact, 2) do
+      {:ok, adapter, adapter_opts}
+    else
+      {:error, :ltm_not_supported}
     end
   end
 
-  defp check_profile_store!(adapter) do
+  defp resolve_profile_store(opts) do
+    {adapter, adapter_opts} = resolve_adapter(opts)
     Code.ensure_loaded(adapter)
 
-    unless function_exported?(adapter, :save_profile, 2) do
-      raise ArgumentError,
-            "Adapter #{inspect(adapter)} does not implement PhoenixAI.Store.Adapter.ProfileStore. " <>
-              "Long-term memory requires an adapter that supports profile storage."
+    if function_exported?(adapter, :save_profile, 2) do
+      {:ok, adapter, adapter_opts}
+    else
+      {:error, :ltm_not_supported}
     end
   end
 end

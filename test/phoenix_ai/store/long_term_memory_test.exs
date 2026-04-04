@@ -131,6 +131,51 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
       # Second extraction has no new messages
       assert {:ok, []} = LongTermMemory.extract_facts(conv.id, store: store, extract_fn: extract_fn, provider: :test)
     end
+
+    test "respects max_facts_per_user limit", %{store: store, conv: conv} do
+      extract_fn = fn _msgs, _ctx, _opts ->
+        {:ok, ~s([{"key": "a", "value": "1"}, {"key": "b", "value": "2"}, {"key": "c", "value": "3"}])}
+      end
+
+      {:ok, saved} =
+        LongTermMemory.extract_facts(conv.id,
+          store: store,
+          extract_fn: extract_fn,
+          provider: :test,
+          max_facts_per_user: 2
+        )
+
+      # Only 2 facts saved due to limit
+      assert length(saved) == 2
+
+      {:ok, stored} = LongTermMemory.get_facts("user_1", store: store)
+      assert length(stored) == 2
+    end
+
+    test "upserts do not count toward limit", %{store: store, conv: conv} do
+      # Pre-populate a fact
+      {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "user_1", key: "a", value: "old"}, store: store)
+
+      extract_fn = fn _msgs, _ctx, _opts ->
+        # "a" is an upsert, "b" is new
+        {:ok, ~s([{"key": "a", "value": "new"}, {"key": "b", "value": "2"}])}
+      end
+
+      {:ok, saved} =
+        LongTermMemory.extract_facts(conv.id,
+          store: store,
+          extract_fn: extract_fn,
+          provider: :test,
+          max_facts_per_user: 2
+        )
+
+      # Both should save — "a" is upsert (doesn't increase count), "b" is new (count goes to 2)
+      assert length(saved) == 2
+
+      {:ok, stored} = LongTermMemory.get_facts("user_1", store: store)
+      assert length(stored) == 2
+      assert Enum.find(stored, &(&1.key == "a")).value == "new"
+    end
   end
 
   describe "apply_memory/3 with LTM injection" do

@@ -166,24 +166,17 @@ if Code.ensure_loaded?(Ecto) do
     @impl PhoenixAI.Store.Adapter.FactStore
     def save_fact(%Fact{} = fact, opts) do
       repo = Keyword.fetch!(opts, :repo)
-      attrs = FactSchema.from_store_struct(fact)
+      attrs = FactSchema.from_store_struct(fact) |> Map.put_new(:id, Uniq.UUID.uuid7())
 
-      case repo.one(from(f in fact_source(opts), where: f.user_id == ^fact.user_id and f.key == ^fact.key)) do
-        nil ->
-          attrs = Map.put_new(attrs, :id, Uniq.UUID.uuid7())
-
-          %FactSchema{}
-          |> Ecto.put_meta(source: fact_table_name(opts))
-          |> FactSchema.changeset(attrs)
-          |> repo.insert()
-          |> handle_fact_result()
-
-        existing ->
-          existing
-          |> FactSchema.changeset(attrs)
-          |> repo.update()
-          |> handle_fact_result()
-      end
+      %FactSchema{}
+      |> Ecto.put_meta(source: fact_table_name(opts))
+      |> FactSchema.changeset(attrs)
+      |> repo.insert(
+        on_conflict: {:replace, [:value, :updated_at]},
+        conflict_target: [:user_id, :key],
+        returning: true
+      )
+      |> handle_fact_result()
     end
 
     @impl PhoenixAI.Store.Adapter.FactStore
@@ -217,24 +210,17 @@ if Code.ensure_loaded?(Ecto) do
     @impl PhoenixAI.Store.Adapter.ProfileStore
     def save_profile(%Profile{} = profile, opts) do
       repo = Keyword.fetch!(opts, :repo)
-      attrs = ProfileSchema.from_store_struct(profile)
+      attrs = ProfileSchema.from_store_struct(profile) |> Map.put_new(:id, Uniq.UUID.uuid7())
 
-      case repo.one(from(p in profile_source(opts), where: p.user_id == ^profile.user_id)) do
-        nil ->
-          attrs = Map.put_new(attrs, :id, Uniq.UUID.uuid7())
-
-          %ProfileSchema{}
-          |> Ecto.put_meta(source: profile_table_name(opts))
-          |> ProfileSchema.changeset(attrs)
-          |> repo.insert()
-          |> handle_profile_result()
-
-        existing ->
-          existing
-          |> ProfileSchema.changeset(attrs)
-          |> repo.update()
-          |> handle_profile_result()
-      end
+      %ProfileSchema{}
+      |> Ecto.put_meta(source: profile_table_name(opts))
+      |> ProfileSchema.changeset(attrs)
+      |> repo.insert(
+        on_conflict: {:replace, [:summary, :metadata, :updated_at]},
+        conflict_target: [:user_id],
+        returning: true
+      )
+      |> handle_profile_result()
     end
 
     @impl PhoenixAI.Store.Adapter.ProfileStore

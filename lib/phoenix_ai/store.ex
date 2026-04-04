@@ -282,13 +282,17 @@ defmodule PhoenixAI.Store do
     inject? = Keyword.get(opts, :inject_long_term_memory, false)
 
     if inject? && user_id && function_exported?(adapter, :save_fact, 2) do
-      {:ok, facts} = adapter.get_facts(user_id, adapter_opts)
+      facts =
+        case adapter.get_facts(user_id, adapter_opts) do
+          {:ok, f} -> f
+          {:error, _} -> []
+        end
 
       profile =
         if function_exported?(adapter, :load_profile, 2) do
           case adapter.load_profile(user_id, adapter_opts) do
             {:ok, p} -> p
-            {:error, :not_found} -> nil
+            _ -> nil
           end
         end
 
