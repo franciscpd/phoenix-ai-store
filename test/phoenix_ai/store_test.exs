@@ -160,6 +160,80 @@ defmodule PhoenixAI.StoreTest do
     end
   end
 
+  describe "soft delete" do
+    test "soft deletes when configured", _context do
+      soft_name = :"soft_store_#{:erlang.unique_integer([:positive])}"
+
+      {:ok, _} =
+        Store.start_link(
+          name: soft_name,
+          adapter: PhoenixAI.Store.Adapters.ETS,
+          soft_delete: true
+        )
+
+      {:ok, conv} = Store.save_conversation(%Conversation{title: "Soft"}, store: soft_name)
+      assert :ok = Store.delete_conversation(conv.id, store: soft_name)
+
+      # Should NOT be loadable (soft-deleted)
+      assert {:error, :not_found} = Store.load_conversation(conv.id, store: soft_name)
+    end
+  end
+
+  describe "user_id_required" do
+    test "rejects conversation without user_id when required" do
+      req_name = :"req_store_#{:erlang.unique_integer([:positive])}"
+
+      {:ok, _} =
+        Store.start_link(
+          name: req_name,
+          adapter: PhoenixAI.Store.Adapters.ETS,
+          user_id_required: true
+        )
+
+      assert {:error, :user_id_required} =
+               Store.save_conversation(%Conversation{title: "No user"}, store: req_name)
+    end
+
+    test "accepts conversation with user_id when required" do
+      req_name = :"req_store_#{:erlang.unique_integer([:positive])}"
+
+      {:ok, _} =
+        Store.start_link(
+          name: req_name,
+          adapter: PhoenixAI.Store.Adapters.ETS,
+          user_id_required: true
+        )
+
+      assert {:ok, _} =
+               Store.save_conversation(
+                 %Conversation{title: "Has user", user_id: "user-1"},
+                 store: req_name
+               )
+    end
+  end
+
+  describe "telemetry" do
+    test "emits telemetry events on save", %{store: store} do
+      test_pid = self()
+      handler_id = "test-handler-#{:erlang.unique_integer([:positive])}"
+
+      :telemetry.attach(
+        handler_id,
+        [:phoenix_ai_store, :conversation, :save, :stop],
+        fn event, measurements, metadata, _ ->
+          send(test_pid, {:telemetry, event, measurements, metadata})
+        end,
+        nil
+      )
+
+      Store.save_conversation(%Conversation{title: "Telemetry"}, store: store)
+
+      assert_receive {:telemetry, [:phoenix_ai_store, :conversation, :save, :stop], _, _}
+
+      :telemetry.detach(handler_id)
+    end
+  end
+
   describe "supervisor" do
     test "supervisor is registered with _supervisor suffix", %{store: store} do
       assert Process.whereis(:"#{store}_supervisor") != nil

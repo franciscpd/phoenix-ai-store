@@ -135,6 +135,52 @@ defmodule PhoenixAI.Store.AdapterContractTest do
           assert length(conversations) == 1
           assert hd(conversations).user_id == "alice"
         end
+
+        test "filters by tags", %{opts: opts} do
+          conv1 = build_conversation(%{tags: ["billing", "support"]})
+          conv2 = build_conversation(%{id: Uniq.UUID.uuid7(), tags: ["general"]})
+          {:ok, _} = @adapter.save_conversation(conv1, opts)
+          {:ok, _} = @adapter.save_conversation(conv2, opts)
+
+          {:ok, conversations} = @adapter.list_conversations([tags: ["billing"]], opts)
+          assert length(conversations) == 1
+          assert hd(conversations).tags == ["billing", "support"]
+        end
+
+        test "supports limit and offset", %{opts: opts} do
+          for i <- 1..5 do
+            {:ok, _} =
+              @adapter.save_conversation(
+                build_conversation(%{id: Uniq.UUID.uuid7(), title: "Conv #{i}"}),
+                opts
+              )
+          end
+
+          {:ok, limited} = @adapter.list_conversations([limit: 2], opts)
+          assert length(limited) == 2
+
+          {:ok, offset} = @adapter.list_conversations([limit: 2, offset: 2], opts)
+          assert length(offset) == 2
+        end
+
+        test "filters by date range", %{opts: opts} do
+          old = DateTime.add(DateTime.utc_now(), -3600, :second)
+          recent = DateTime.utc_now()
+
+          conv1 = build_conversation(%{inserted_at: old})
+          conv2 = build_conversation(%{id: Uniq.UUID.uuid7(), inserted_at: recent})
+          {:ok, _} = @adapter.save_conversation(conv1, opts)
+          {:ok, _} = @adapter.save_conversation(conv2, opts)
+
+          midpoint = DateTime.add(DateTime.utc_now(), -1800, :second)
+          {:ok, after_mid} = @adapter.list_conversations([inserted_after: midpoint], opts)
+          assert length(after_mid) >= 1
+
+          assert Enum.all?(
+                   after_mid,
+                   &(DateTime.compare(&1.inserted_at, midpoint) in [:gt, :eq])
+                 )
+        end
       end
 
       describe "count_conversations/2" do

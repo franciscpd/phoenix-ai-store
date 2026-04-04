@@ -14,7 +14,7 @@ defmodule PhoenixAI.Store.Adapters.ETS.TableOwner do
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
     {name, _opts} = Keyword.pop(opts, :name)
-    GenServer.start_link(__MODULE__, [], name: name)
+    GenServer.start_link(__MODULE__, [name: name], name: name)
   end
 
   @doc "Returns the ETS table reference owned by this server."
@@ -26,9 +26,11 @@ defmodule PhoenixAI.Store.Adapters.ETS.TableOwner do
   # -- Server Callbacks --
 
   @impl true
-  def init([]) do
+  def init(opts) do
+    name = Keyword.fetch!(opts, :name)
+
     table =
-      :ets.new(:phoenix_ai_store, [
+      :ets.new(name, [
         :set,
         :public,
         read_concurrency: true,

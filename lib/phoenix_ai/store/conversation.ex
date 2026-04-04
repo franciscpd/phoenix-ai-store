@@ -59,7 +59,7 @@ defmodule PhoenixAI.Store.Conversation do
     * `:tags` - list of string tags (defaults to `[]`)
     * `:model` - the AI model identifier
 
-  Messages are converted via `PhoenixAI.Store.Message.from_phoenix_ai/1`.§
+  Messages are converted via `PhoenixAI.Store.Message.from_phoenix_ai/1`.
   """
   @spec from_phoenix_ai(PhoenixAI.Conversation.t(), keyword()) :: t()
   def from_phoenix_ai(%PhoenixAI.Conversation{} = conv, opts \\ []) do
