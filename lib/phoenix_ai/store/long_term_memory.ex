@@ -88,8 +88,30 @@ defmodule PhoenixAI.Store.LongTermMemory do
 
   # -- Extraction --
 
-  @spec extract_facts(String.t(), keyword()) :: {:ok, [Fact.t()]} | {:error, term()}
+  @spec extract_facts(String.t(), keyword()) ::
+          {:ok, [Fact.t()]} | {:ok, :async} | {:error, term()}
   def extract_facts(conversation_id, opts \\ []) do
+    mode = Keyword.get(opts, :extraction_mode, :sync)
+
+    case mode do
+      :async ->
+        with {:ok, _adapter, _adapter_opts} <- resolve_fact_store(opts) do
+          store = Keyword.get(opts, :store, :phoenix_ai_store_default)
+          task_sup = :"#{store}_task_supervisor"
+
+          Task.Supervisor.start_child(task_sup, fn ->
+            do_extract_facts_with_telemetry(conversation_id, opts)
+          end)
+
+          {:ok, :async}
+        end
+
+      _sync ->
+        do_extract_facts_with_telemetry(conversation_id, opts)
+    end
+  end
+
+  defp do_extract_facts_with_telemetry(conversation_id, opts) do
     :telemetry.span([:phoenix_ai_store, :extract_facts], %{}, fn ->
       result =
         with {:ok, adapter, adapter_opts} <- resolve_fact_store(opts) do

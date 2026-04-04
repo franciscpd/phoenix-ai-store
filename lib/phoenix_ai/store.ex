@@ -38,7 +38,8 @@ defmodule PhoenixAI.Store do
   @impl true
   def init(config) do
     children =
-      adapter_children(config[:adapter], config) ++
+      [{Task.Supervisor, name: :"#{config[:name]}_task_supervisor"}] ++
+        adapter_children(config[:adapter], config) ++
         [{Instance, config}]
 
     Supervisor.init(children, strategy: :one_for_one)
@@ -280,7 +281,7 @@ defmodule PhoenixAI.Store do
   def delete_fact(user_id, key, opts \\ []), do: LongTermMemory.delete_fact(user_id, key, opts)
 
   @doc "Extracts new facts from a conversation's unprocessed messages and persists them."
-  @spec extract_facts(String.t(), keyword()) :: {:ok, [Fact.t()]} | {:error, term()}
+  @spec extract_facts(String.t(), keyword()) :: {:ok, [Fact.t()]} | {:ok, :async} | {:error, term()}
   def extract_facts(conversation_id, opts \\ []), do: LongTermMemory.extract_facts(conversation_id, opts)
 
   @doc "Persists a user profile."

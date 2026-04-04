@@ -176,6 +176,27 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
       assert length(stored) == 2
       assert Enum.find(stored, &(&1.key == "a")).value == "new"
     end
+
+    test "async mode returns {:ok, :async} immediately", %{store: store, conv: conv} do
+      extract_fn = fn _msgs, _ctx, _opts ->
+        Process.sleep(50)
+        {:ok, ~s([{"key": "async_fact", "value": "yes"}])}
+      end
+
+      assert {:ok, :async} =
+               LongTermMemory.extract_facts(conv.id,
+                 store: store,
+                 extract_fn: extract_fn,
+                 provider: :test,
+                 extraction_mode: :async
+               )
+
+      # Wait for async task to complete
+      Process.sleep(200)
+
+      {:ok, facts} = LongTermMemory.get_facts("user_1", store: store)
+      assert Enum.any?(facts, &(&1.key == "async_fact"))
+    end
   end
 
   describe "apply_memory/3 with LTM injection" do
