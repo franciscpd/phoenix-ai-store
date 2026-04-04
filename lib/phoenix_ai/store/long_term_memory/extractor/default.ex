@@ -45,6 +45,20 @@ defmodule PhoenixAI.Store.LongTermMemory.Extractor.Default do
       |> Enum.map(fn msg -> "#{msg.role}: #{msg.content}" end)
       |> Enum.join("\n")
 
+    existing_facts_text =
+      case Map.get(context, :existing_facts, []) do
+        [] ->
+          ""
+
+        facts ->
+          known =
+            facts
+            |> Enum.map(fn f -> "- #{f.key}: #{f.value}" end)
+            |> Enum.join("\n")
+
+          "\nAlready known facts (do not re-extract these unless the value changed):\n#{known}\n"
+      end
+
     prompt = [
       %PhoenixAI.Message{
         role: :system,
@@ -54,7 +68,7 @@ defmodule PhoenixAI.Store.LongTermMemory.Extractor.Default do
         Keys should be snake_case identifiers (e.g., "preferred_language", "city", "expertise").
         Values should be concise strings.
         If no facts can be extracted, return an empty array [].
-        Output ONLY the JSON array, no preamble or explanation.
+        #{existing_facts_text}Output ONLY the JSON array, no preamble or explanation.
         """
       },
       %PhoenixAI.Message{

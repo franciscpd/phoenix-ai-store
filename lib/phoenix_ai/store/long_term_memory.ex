@@ -133,11 +133,14 @@ defmodule PhoenixAI.Store.LongTermMemory do
         {:ok, []}
       else
         extractor = Keyword.get(opts, :extractor, Extractor.Default)
+        {:ok, existing_facts} = adapter.get_facts(conv.user_id, adapter_opts)
+
         context = %{
           user_id: conv.user_id,
           conversation_id: conv.id,
           provider: Keyword.get(opts, :provider),
-          model: Keyword.get(opts, :model)
+          model: Keyword.get(opts, :model),
+          existing_facts: existing_facts
         }
 
         case extractor.extract(new_messages, context, opts) do
@@ -254,9 +257,9 @@ defmodule PhoenixAI.Store.LongTermMemory do
     end
   end
 
-  defp call_profile_ai(existing_profile, facts, context, opts) do
-    provider = Keyword.get(opts, :provider, context[:provider])
-    model = Keyword.get(opts, :model, context[:model])
+  defp call_profile_ai(existing_profile, facts, context, _opts) do
+    provider = context[:provider]
+    model = context[:model]
 
     unless provider do
       raise ArgumentError,
