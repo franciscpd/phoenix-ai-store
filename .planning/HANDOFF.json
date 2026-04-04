@@ -1,0 +1,36 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-04-04T03:26:32.104Z",
+  "phase": "3",
+  "phase_name": "memory-strategies",
+  "phase_dir": ".planning/phases/03-memory-strategies",
+  "plan": 1,
+  "task": 8,
+  "total_tasks": 8,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "Add pinned field to Message", "status": "done", "commit": "c3e7490"},
+    {"id": 2, "name": "TokenCounter behaviour + Default", "status": "done", "commit": "a9bb248"},
+    {"id": 3, "name": "Strategy behaviour + SlidingWindow", "status": "done", "commit": "cbb4851"},
+    {"id": 4, "name": "TokenTruncation strategy", "status": "done", "commit": "13b1f15"},
+    {"id": 5, "name": "Summarization strategy", "status": "done", "commit": "f54f3ec"},
+    {"id": 6, "name": "Pipeline orchestrator", "status": "done"},
+    {"id": 7, "name": "apply_memory/3 facade", "status": "done"},
+    {"id": 8, "name": "Final verification + code review fixes", "status": "done"}
+  ],
+  "remaining_tasks": [],
+  "blockers": [],
+  "human_actions_pending": [],
+  "decisions": [
+    {"decision": "Strategy behaviour is always synchronous (apply/3 + priority/0)", "rationale": "Simple, predictable. Summarization blocks until complete.", "phase": "3"},
+    {"decision": "Strategy receives messages + context map (not full conversation)", "rationale": "Keeps strategies composable. Context has model, provider, token_counter, etc.", "phase": "3"},
+    {"decision": "Token counting is provider-dispatched via TokenCounter behaviour", "rationale": "Extensible, correct per-provider. Default uses bytes/4 heuristic.", "phase": "3"},
+    {"decision": "System messages are auto-pinned, manual pinned: boolean field added", "rationale": "System prompts always preserved. Any message can be manually pinned.", "phase": "3"},
+    {"decision": "Priority-based composition with presets (:default, :aggressive, :summarize)", "rationale": "System resolves conflicts (pinned always wins). Presets for easy start.", "phase": "3"},
+    {"decision": "Summarization provider/model configurable with fallback to conversation settings", "rationale": "Use cheap model for summarization, expensive model for main conversation.", "phase": "3"},
+    {"decision": "PhoenixAI upgraded to ~> 0.2 (normalized Usage struct)", "rationale": "Unblocks Phase 6 Cost Tracking. Response.usage now returns %PhoenixAI.Usage{}.", "phase": "3"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Phase 3 is COMPLETE (133 tests, 7/7 UAT passed, code review done). Next: /gsd:discuss-phase 4 (Long-Term Memory) or /gsd:plan-phase 4",
+  "context_notes": "Phases 1-3 complete. Phase 2 was absorbed by Phase 1. 133 tests total. Postgres container 'phoenix_ai_store_postgres' on port 5434. All code review issues resolved for both phases. PhoenixAI upgraded to 0.2.0 with Usage struct."
+}
