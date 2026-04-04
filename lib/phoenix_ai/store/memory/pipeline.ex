@@ -14,6 +14,12 @@ defmodule PhoenixAI.Store.Memory.Pipeline do
       Pipeline.preset(:default)     # SlidingWindow last: 50
       Pipeline.preset(:aggressive)  # TokenTruncation max_tokens: 4096
       Pipeline.preset(:summarize)   # Summarization + SlidingWindow
+
+  **Note on pinned message ordering:** Pinned messages (role: :system or pinned: true)
+  are always placed at the beginning of the output list, regardless of their original
+  position. This is intentional — LLMs expect system instructions at the start of the
+  message list. If you need a pinned message at a specific position, consider injecting
+  it manually after the pipeline runs.
   """
 
   alias PhoenixAI.Store.Memory.Strategies.{SlidingWindow, Summarization, TokenTruncation}

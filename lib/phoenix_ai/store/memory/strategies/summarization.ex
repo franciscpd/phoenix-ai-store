@@ -64,9 +64,16 @@ defmodule PhoenixAI.Store.Memory.Strategies.Summarization do
     end
   end
 
+  # Uses AI.chat/2 from the phoenix_ai dependency
   defp call_ai(messages, context, opts) do
     provider = Keyword.get(opts, :provider, context[:provider])
     model = Keyword.get(opts, :model, context[:model])
+
+    unless provider do
+      raise ArgumentError,
+            "Summarization requires :provider in context or opts. " <>
+              "Pass it via Pipeline context or Summarization opts."
+    end
 
     conversation_text =
       messages

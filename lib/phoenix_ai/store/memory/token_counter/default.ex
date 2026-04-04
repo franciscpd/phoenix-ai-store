@@ -1,6 +1,6 @@
 defmodule PhoenixAI.Store.Memory.TokenCounter.Default do
   @moduledoc """
-  Default token counter using a `chars / 4` heuristic.
+  Default token counter using a `bytes / 4` heuristic.
 
   This approximation is commonly used as a rough estimate for
   English text across most LLM tokenizers.
@@ -16,6 +16,6 @@ defmodule PhoenixAI.Store.Memory.TokenCounter.Default do
 
   @impl true
   def count_tokens(content, _opts) when is_binary(content) do
-    max(1, div(String.length(content), 4))
+    max(1, div(byte_size(content), 4))
   end
 end

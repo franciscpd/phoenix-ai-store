@@ -24,7 +24,10 @@ defmodule PhoenixAI.Store.Memory.Strategies.TokenTruncation do
 
   @impl true
   def apply(messages, context, opts) do
-    max_tokens = Keyword.fetch!(opts, :max_tokens)
+    max_tokens =
+      Keyword.get(opts, :max_tokens) ||
+        raise ArgumentError, "TokenTruncation requires :max_tokens option"
+
     counter = context[:token_counter] || PhoenixAI.Store.Memory.TokenCounter.Default
 
     result =

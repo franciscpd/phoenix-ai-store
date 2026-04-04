@@ -13,12 +13,12 @@ defmodule PhoenixAI.Store.Memory.TokenCounter.DefaultTest do
     end
 
     test "returns token count for normal content" do
-      # "Hello world" = 11 chars -> div(11, 4) = 2
+      # "Hello world" = 11 bytes -> div(11, 4) = 2
       assert Default.count_tokens("Hello world", []) == 2
     end
 
     test "returns minimum of 1 for short non-empty content" do
-      # "Hi" = 2 chars -> div(2, 4) = 0, but min is 1
+      # "Hi" = 2 bytes -> div(2, 4) = 0, but min is 1
       assert Default.count_tokens("Hi", []) == 1
     end
 

@@ -302,6 +302,24 @@ defmodule PhoenixAI.StoreTest do
       assert hd(result).content == "You are helpful"
     end
 
+    test "apply_memory works with single message pipeline", %{store: store} do
+      {:ok, conv} = Store.save_conversation(%Conversation{title: "Error test"}, store: store)
+
+      {:ok, _} =
+        Store.add_message(conv.id, %Message{role: :user, content: "Hi"}, store: store)
+
+      {:ok, result} =
+        Store.apply_memory(
+          conv.id,
+          PhoenixAI.Store.Memory.Pipeline.new([
+            {PhoenixAI.Store.Memory.Strategies.SlidingWindow, [last: 100]}
+          ]),
+          store: store
+        )
+
+      assert length(result) == 1
+    end
+
     test "works with empty conversation", %{store: store} do
       {:ok, conv} = Store.save_conversation(%Conversation{title: "Empty"}, store: store)
 

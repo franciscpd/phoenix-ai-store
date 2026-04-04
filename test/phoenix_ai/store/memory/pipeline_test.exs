@@ -42,6 +42,16 @@ defmodule PhoenixAI.Store.Memory.PipelineTest do
     end
   end
 
+  defmodule FailingStrategy do
+    @behaviour PhoenixAI.Store.Memory.Strategy
+
+    @impl true
+    def apply(_messages, _context, _opts), do: {:error, :boom}
+
+    @impl true
+    def priority, do: 50
+  end
+
   describe "run/4" do
     test "extracts pinned system messages and re-injects them at the beginning" do
       messages = [
@@ -138,16 +148,6 @@ defmodule PhoenixAI.Store.Memory.PipelineTest do
     end
 
     test "returns error when a strategy fails" do
-      defmodule FailingStrategy do
-        @behaviour PhoenixAI.Store.Memory.Strategy
-
-        @impl true
-        def apply(_messages, _context, _opts), do: {:error, :boom}
-
-        @impl true
-        def priority, do: 50
-      end
-
       pipeline = Pipeline.new([{FailingStrategy, []}])
       messages = [msg(:user, "Hello")]
 
@@ -185,6 +185,32 @@ defmodule PhoenixAI.Store.Memory.PipelineTest do
 
       assert length(non_pinned) == 1
       assert hd(non_pinned).content == "User msg 2"
+    end
+
+    test "preset :summarize runs Summarization then SlidingWindow" do
+      messages =
+        for i <- 1..30 do
+          msg(:user, "Message #{i}")
+        end
+
+      summarize_fn = fn _messages, _context, _opts ->
+        {:ok, "Summary of older messages"}
+      end
+
+      pipeline =
+        Pipeline.new([
+          {Summarization, [threshold: 20, summarize_fn: summarize_fn]},
+          {SlidingWindow, [last: 20]}
+        ])
+
+      {:ok, result} = Pipeline.run(pipeline, messages, %{})
+
+      # Should have summary message + some recent messages
+      assert length(result) > 0
+      # The summary is pinned, so it gets extracted and re-injected at the beginning
+      summary = Enum.find(result, &(&1.pinned == true))
+      assert summary != nil
+      assert summary.content == "Summary of older messages"
     end
   end
 end
