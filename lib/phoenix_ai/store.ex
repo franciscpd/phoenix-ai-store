@@ -265,14 +265,38 @@ defmodule PhoenixAI.Store do
   # -- Long-Term Memory Facade --
 
   alias PhoenixAI.Store.LongTermMemory
+  alias PhoenixAI.Store.LongTermMemory.{Fact, Profile}
 
+  @doc "Persists a long-term memory fact for a user."
+  @spec save_fact(Fact.t(), keyword()) :: {:ok, Fact.t()} | {:error, term()}
   def save_fact(fact, opts \\ []), do: LongTermMemory.save_fact(fact, opts)
+
+  @doc "Returns all stored facts for a user."
+  @spec get_facts(String.t(), keyword()) :: {:ok, [Fact.t()]} | {:error, term()}
   def get_facts(user_id, opts \\ []), do: LongTermMemory.get_facts(user_id, opts)
+
+  @doc "Deletes a specific fact by key for a user."
+  @spec delete_fact(String.t(), String.t(), keyword()) :: :ok | {:error, term()}
   def delete_fact(user_id, key, opts \\ []), do: LongTermMemory.delete_fact(user_id, key, opts)
+
+  @doc "Extracts new facts from a conversation's unprocessed messages and persists them."
+  @spec extract_facts(String.t(), keyword()) :: {:ok, [Fact.t()]} | {:error, term()}
   def extract_facts(conversation_id, opts \\ []), do: LongTermMemory.extract_facts(conversation_id, opts)
+
+  @doc "Persists a user profile."
+  @spec save_profile(Profile.t(), keyword()) :: {:ok, Profile.t()} | {:error, term()}
   def save_profile(profile, opts \\ []), do: LongTermMemory.save_profile(profile, opts)
+
+  @doc "Loads the profile for a user by ID."
+  @spec get_profile(String.t(), keyword()) :: {:ok, Profile.t()} | {:error, :not_found | term()}
   def get_profile(user_id, opts \\ []), do: LongTermMemory.get_profile(user_id, opts)
+
+  @doc "Deletes the profile for a user."
+  @spec delete_profile(String.t(), keyword()) :: :ok | {:error, term()}
   def delete_profile(user_id, opts \\ []), do: LongTermMemory.delete_profile(user_id, opts)
+
+  @doc "Regenerates and saves a user profile summary from their stored facts."
+  @spec update_profile(String.t(), keyword()) :: {:ok, Profile.t()} | {:error, term()}
   def update_profile(user_id, opts \\ []), do: LongTermMemory.update_profile(user_id, opts)
 
   # -- Private Helpers --

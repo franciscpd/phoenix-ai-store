@@ -14,55 +14,90 @@ defmodule PhoenixAI.Store.LongTermMemory do
 
   @spec save_fact(Fact.t(), keyword()) :: {:ok, Fact.t()} | {:error, term()}
   def save_fact(%Fact{} = fact, opts \\ []) do
-    with {:ok, adapter, adapter_opts} <- resolve_fact_store(opts) do
-      adapter.save_fact(fact, adapter_opts)
-    end
+    :telemetry.span([:phoenix_ai_store, :fact, :save], %{}, fn ->
+      result =
+        with {:ok, adapter, adapter_opts} <- resolve_fact_store(opts) do
+          adapter.save_fact(fact, adapter_opts)
+        end
+
+      {result, %{}}
+    end)
   end
 
   @spec get_facts(String.t(), keyword()) :: {:ok, [Fact.t()]} | {:error, term()}
   def get_facts(user_id, opts \\ []) do
-    with {:ok, adapter, adapter_opts} <- resolve_fact_store(opts) do
-      adapter.get_facts(user_id, adapter_opts)
-    end
+    :telemetry.span([:phoenix_ai_store, :fact, :get], %{}, fn ->
+      result =
+        with {:ok, adapter, adapter_opts} <- resolve_fact_store(opts) do
+          adapter.get_facts(user_id, adapter_opts)
+        end
+
+      {result, %{}}
+    end)
   end
 
   @spec delete_fact(String.t(), String.t(), keyword()) :: :ok | {:error, term()}
   def delete_fact(user_id, key, opts \\ []) do
-    with {:ok, adapter, adapter_opts} <- resolve_fact_store(opts) do
-      adapter.delete_fact(user_id, key, adapter_opts)
-    end
+    :telemetry.span([:phoenix_ai_store, :fact, :delete], %{}, fn ->
+      result =
+        with {:ok, adapter, adapter_opts} <- resolve_fact_store(opts) do
+          adapter.delete_fact(user_id, key, adapter_opts)
+        end
+
+      {result, %{}}
+    end)
   end
 
   # -- Manual CRUD: Profiles --
 
   @spec save_profile(Profile.t(), keyword()) :: {:ok, Profile.t()} | {:error, term()}
   def save_profile(%Profile{} = profile, opts \\ []) do
-    with {:ok, adapter, adapter_opts} <- resolve_profile_store(opts) do
-      adapter.save_profile(profile, adapter_opts)
-    end
+    :telemetry.span([:phoenix_ai_store, :profile, :save], %{}, fn ->
+      result =
+        with {:ok, adapter, adapter_opts} <- resolve_profile_store(opts) do
+          adapter.save_profile(profile, adapter_opts)
+        end
+
+      {result, %{}}
+    end)
   end
 
   @spec get_profile(String.t(), keyword()) :: {:ok, Profile.t()} | {:error, :not_found | term()}
   def get_profile(user_id, opts \\ []) do
-    with {:ok, adapter, adapter_opts} <- resolve_profile_store(opts) do
-      adapter.load_profile(user_id, adapter_opts)
-    end
+    :telemetry.span([:phoenix_ai_store, :profile, :get], %{}, fn ->
+      result =
+        with {:ok, adapter, adapter_opts} <- resolve_profile_store(opts) do
+          adapter.load_profile(user_id, adapter_opts)
+        end
+
+      {result, %{}}
+    end)
   end
 
   @spec delete_profile(String.t(), keyword()) :: :ok | {:error, term()}
   def delete_profile(user_id, opts \\ []) do
-    with {:ok, adapter, adapter_opts} <- resolve_profile_store(opts) do
-      adapter.delete_profile(user_id, adapter_opts)
-    end
+    :telemetry.span([:phoenix_ai_store, :profile, :delete], %{}, fn ->
+      result =
+        with {:ok, adapter, adapter_opts} <- resolve_profile_store(opts) do
+          adapter.delete_profile(user_id, adapter_opts)
+        end
+
+      {result, %{}}
+    end)
   end
 
   # -- Extraction --
 
   @spec extract_facts(String.t(), keyword()) :: {:ok, [Fact.t()]} | {:error, term()}
   def extract_facts(conversation_id, opts \\ []) do
-    with {:ok, adapter, adapter_opts} <- resolve_fact_store(opts) do
-      do_extract_facts(conversation_id, adapter, adapter_opts, opts)
-    end
+    :telemetry.span([:phoenix_ai_store, :extract_facts], %{}, fn ->
+      result =
+        with {:ok, adapter, adapter_opts} <- resolve_fact_store(opts) do
+          do_extract_facts(conversation_id, adapter, adapter_opts, opts)
+        end
+
+      {result, %{}}
+    end)
   end
 
   defp do_extract_facts(conversation_id, adapter, adapter_opts, opts) do
@@ -148,10 +183,15 @@ defmodule PhoenixAI.Store.LongTermMemory do
 
   @spec update_profile(String.t(), keyword()) :: {:ok, Profile.t()} | {:error, term()}
   def update_profile(user_id, opts \\ []) do
-    with {:ok, adapter, adapter_opts} <- resolve_profile_store(opts),
-         {:ok, _, _} <- resolve_fact_store(opts) do
-      do_update_profile_impl(user_id, adapter, adapter_opts, opts)
-    end
+    :telemetry.span([:phoenix_ai_store, :profile, :update], %{}, fn ->
+      result =
+        with {:ok, adapter, adapter_opts} <- resolve_profile_store(opts),
+             {:ok, _, _} <- resolve_fact_store(opts) do
+          do_update_profile_impl(user_id, adapter, adapter_opts, opts)
+        end
+
+      {result, %{}}
+    end)
   end
 
   defp do_update_profile_impl(user_id, adapter, adapter_opts, opts) do
