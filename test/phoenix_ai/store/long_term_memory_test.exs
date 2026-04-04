@@ -68,4 +68,68 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
       assert {:error, :not_found} = LongTermMemory.get_profile("u1", store: store)
     end
   end
+
+  describe "extract_facts/2" do
+    setup %{store: store} do
+      conv = %PhoenixAI.Store.Conversation{user_id: "user_1", messages: []}
+      {:ok, conv} = Store.save_conversation(conv, store: store)
+      {:ok, _} = Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :user, content: "I live in SP"}, store: store)
+      {:ok, _} = Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :assistant, content: "Got it!"}, store: store)
+      {:ok, conv: conv}
+    end
+
+    test "extracts facts using extract_fn", %{store: store, conv: conv} do
+      extract_fn = fn _messages, _context, _opts ->
+        {:ok, ~s([{"key": "city", "value": "SP"}])}
+      end
+
+      assert {:ok, facts} =
+               LongTermMemory.extract_facts(conv.id,
+                 store: store,
+                 extract_fn: extract_fn,
+                 provider: :test
+               )
+
+      assert length(facts) == 1
+      assert hd(facts).key == "city"
+
+      # Facts are persisted
+      assert {:ok, stored} = LongTermMemory.get_facts("user_1", store: store)
+      assert length(stored) == 1
+    end
+
+    test "incremental extraction skips already-processed messages", %{store: store, conv: conv} do
+      call_count = :counters.new(1, [:atomics])
+
+      extract_fn = fn messages, _context, _opts ->
+        :counters.add(call_count, 1, 1)
+        count = length(messages)
+        {:ok, ~s([{"key": "call_#{:counters.get(call_count, 1)}", "value": "#{count} msgs"}])}
+      end
+
+      # First extraction — processes 2 messages
+      {:ok, _} = LongTermMemory.extract_facts(conv.id, store: store, extract_fn: extract_fn, provider: :test)
+
+      # Add another message
+      {:ok, _} = Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :user, content: "New msg"}, store: store)
+
+      # Second extraction — should only process the new message
+      {:ok, _} = LongTermMemory.extract_facts(conv.id, store: store, extract_fn: extract_fn, provider: :test)
+
+      {:ok, facts} = LongTermMemory.get_facts("user_1", store: store)
+      # Second call should have received fewer messages
+      second_fact = Enum.find(facts, &(&1.key == "call_2"))
+      assert second_fact.value == "1 msgs"
+    end
+
+    test "returns ok empty when no new messages", %{store: store, conv: conv} do
+      extract_fn = fn _msgs, _ctx, _opts -> {:ok, "[]"} end
+
+      # First extraction processes everything
+      {:ok, _} = LongTermMemory.extract_facts(conv.id, store: store, extract_fn: extract_fn, provider: :test)
+
+      # Second extraction has no new messages
+      assert {:ok, []} = LongTermMemory.extract_facts(conv.id, store: store, extract_fn: extract_fn, provider: :test)
+    end
+  end
 end
