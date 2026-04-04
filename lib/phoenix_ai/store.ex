@@ -245,17 +245,58 @@ defmodule PhoenixAI.Store do
           Keyword.get(opts, :token_counter, PhoenixAI.Store.Memory.TokenCounter.Default)
       }
 
-      with {:ok, messages} <- adapter.get_messages(conversation_id, adapter_opts),
-           {:ok, filtered} <- Pipeline.run(pipeline, messages, context) do
-        result = {:ok, Enum.map(filtered, &Message.to_phoenix_ai/1)}
-        {result, %{}}
+      with {:ok, messages} <- adapter.get_messages(conversation_id, adapter_opts) do
+        messages = maybe_inject_ltm(messages, adapter, adapter_opts, opts)
+
+        case Pipeline.run(pipeline, messages, context) do
+          {:ok, filtered} ->
+            result = {:ok, Enum.map(filtered, &Message.to_phoenix_ai/1)}
+            {result, %{}}
+
+          {:error, _} = error ->
+            {error, %{}}
+        end
       else
         {:error, _} = error -> {error, %{}}
       end
     end)
   end
 
+  # -- Long-Term Memory Facade --
+
+  alias PhoenixAI.Store.LongTermMemory
+
+  def save_fact(fact, opts \\ []), do: LongTermMemory.save_fact(fact, opts)
+  def get_facts(user_id, opts \\ []), do: LongTermMemory.get_facts(user_id, opts)
+  def delete_fact(user_id, key, opts \\ []), do: LongTermMemory.delete_fact(user_id, key, opts)
+  def extract_facts(conversation_id, opts \\ []), do: LongTermMemory.extract_facts(conversation_id, opts)
+  def save_profile(profile, opts \\ []), do: LongTermMemory.save_profile(profile, opts)
+  def get_profile(user_id, opts \\ []), do: LongTermMemory.get_profile(user_id, opts)
+  def delete_profile(user_id, opts \\ []), do: LongTermMemory.delete_profile(user_id, opts)
+  def update_profile(user_id, opts \\ []), do: LongTermMemory.update_profile(user_id, opts)
+
   # -- Private Helpers --
+
+  defp maybe_inject_ltm(messages, adapter, adapter_opts, opts) do
+    user_id = Keyword.get(opts, :user_id)
+    inject? = Keyword.get(opts, :inject_long_term_memory, false)
+
+    if inject? && user_id && function_exported?(adapter, :save_fact, 2) do
+      {:ok, facts} = adapter.get_facts(user_id, adapter_opts)
+
+      profile =
+        if function_exported?(adapter, :load_profile, 2) do
+          case adapter.load_profile(user_id, adapter_opts) do
+            {:ok, p} -> p
+            {:error, :not_found} -> nil
+          end
+        end
+
+      PhoenixAI.Store.LongTermMemory.Injector.inject(facts, profile, messages)
+    else
+      messages
+    end
+  end
 
   defp resolve_adapter(opts) do
     store = Keyword.get(opts, :store, :phoenix_ai_store_default)

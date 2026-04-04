@@ -34,6 +34,39 @@ defmodule PhoenixAI.Store.Config do
       type: :boolean,
       default: false,
       doc: "When true, conversations must have a user_id."
+    ],
+    long_term_memory: [
+      type: :keyword_list,
+      default: [],
+      doc: "Long-term memory configuration.",
+      keys: [
+        enabled: [type: :boolean, default: false, doc: "Enable LTM subsystem."],
+        max_facts_per_user: [type: :pos_integer, default: 100, doc: "Maximum facts per user."],
+        extraction_trigger: [
+          type: {:in, [:manual, :per_turn, :on_close]},
+          default: :manual,
+          doc: "When fact extraction runs: :manual, :per_turn, or :on_close."
+        ],
+        extraction_mode: [
+          type: {:in, [:sync, :async]},
+          default: :sync,
+          doc: "Whether extraction blocks (:sync) or runs in background (:async)."
+        ],
+        extractor: [
+          type: :atom,
+          default: PhoenixAI.Store.LongTermMemory.Extractor.Default,
+          doc: "Module implementing the Extractor behaviour."
+        ],
+        inject_long_term_memory: [
+          type: :boolean,
+          default: false,
+          doc: "Auto-inject facts/profile in apply_memory/3."
+        ],
+        extraction_provider: [type: :atom, doc: "Provider override for extraction AI calls."],
+        extraction_model: [type: :string, doc: "Model override for extraction AI calls."],
+        profile_provider: [type: :atom, doc: "Provider override for profile AI calls."],
+        profile_model: [type: :string, doc: "Model override for profile AI calls."]
+      ]
     ]
   ]
 

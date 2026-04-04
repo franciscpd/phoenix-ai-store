@@ -133,6 +133,48 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
     end
   end
 
+  describe "apply_memory/3 with LTM injection" do
+    setup %{store: store} do
+      conv = %PhoenixAI.Store.Conversation{user_id: "user_1", messages: []}
+      {:ok, conv} = Store.save_conversation(conv, store: store)
+      {:ok, _} = Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :system, content: "Be helpful.", pinned: true}, store: store)
+      {:ok, _} = Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :user, content: "Hello"}, store: store)
+
+      {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "user_1", key: "lang", value: "pt"}, store: store)
+      {:ok, _} = LongTermMemory.save_profile(%Profile{user_id: "user_1", summary: "A dev."}, store: store)
+
+      {:ok, conv: conv}
+    end
+
+    test "injects facts and profile as pinned messages", %{store: store, conv: conv} do
+      pipeline = PhoenixAI.Store.Memory.Pipeline.preset(:default)
+
+      {:ok, messages} =
+        Store.apply_memory(conv.id, pipeline,
+          store: store,
+          inject_long_term_memory: true,
+          user_id: "user_1"
+        )
+
+      # Should have: profile msg + facts msg + system msg + user msg
+      assert length(messages) >= 3
+
+      contents = Enum.map(messages, & &1.content)
+      assert Enum.any?(contents, &(&1 =~ "A dev."))
+      assert Enum.any?(contents, &(&1 =~ "lang: pt"))
+    end
+
+    test "does not inject when option is false", %{store: store, conv: conv} do
+      pipeline = PhoenixAI.Store.Memory.Pipeline.preset(:default)
+
+      {:ok, messages} =
+        Store.apply_memory(conv.id, pipeline, store: store)
+
+      contents = Enum.map(messages, & &1.content)
+      refute Enum.any?(contents, &(&1 =~ "A dev."))
+    end
+  end
+
   describe "update_profile/2" do
     test "creates a new profile from facts", %{store: store} do
       {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "u1", key: "lang", value: "pt"}, store: store)
