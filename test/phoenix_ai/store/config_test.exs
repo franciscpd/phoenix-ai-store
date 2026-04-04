@@ -99,7 +99,13 @@ defmodule PhoenixAI.Store.ConfigTest do
     test "per-instance opts override global defaults" do
       Application.put_env(:phoenix_ai_store, :defaults, soft_delete: true, prefix: "global_")
 
-      opts = Config.resolve(name: :my_store, adapter: FakeAdapter, soft_delete: false, prefix: "local_")
+      opts =
+        Config.resolve(
+          name: :my_store,
+          adapter: FakeAdapter,
+          soft_delete: false,
+          prefix: "local_"
+        )
 
       assert opts[:soft_delete] == false
       assert opts[:prefix] == "local_"

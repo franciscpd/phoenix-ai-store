@@ -13,7 +13,8 @@ defmodule PhoenixAI.Store.MixProject do
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
       aliases: aliases(),
-      description: "Persistence, memory management, guardrails, and cost tracking for PhoenixAI conversations",
+      description:
+        "Persistence, memory management, guardrails, and cost tracking for PhoenixAI conversations",
       package: package(),
       name: "PhoenixAI.Store",
       source_url: @source_url,

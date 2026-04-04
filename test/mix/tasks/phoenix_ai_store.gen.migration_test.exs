@@ -40,7 +40,10 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
 
     # Check messages table
     assert content =~ "create table(:phoenix_ai_store_messages, primary_key: false)"
-    assert content =~ "references(:phoenix_ai_store_conversations, type: :binary_id, on_delete: :delete_all)"
+
+    assert content =~
+             "references(:phoenix_ai_store_conversations, type: :binary_id, on_delete: :delete_all)"
+
     assert content =~ "add :role, :string, null: false"
     assert content =~ "add :content, :text"
     assert content =~ "add :tool_call_id, :string"
@@ -49,7 +52,9 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
 
     # Check messages indexes
     assert content =~ ~s|create index(:phoenix_ai_store_messages, [:conversation_id])|
-    assert content =~ ~s|create index(:phoenix_ai_store_messages, [:conversation_id, :inserted_at])|
+
+    assert content =~
+             ~s|create index(:phoenix_ai_store_messages, [:conversation_id, :inserted_at])|
 
     # Check filename has timestamp format
     filename = Path.basename(file)

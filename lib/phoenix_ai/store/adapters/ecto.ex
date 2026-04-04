@@ -135,7 +135,9 @@ if Code.ensure_loaded?(Ecto) do
 
     @impl true
     def get_messages(conversation_id, opts) do
-      if not valid_uuid?(conversation_id), do: {:ok, []}, else: do_get_messages(conversation_id, opts)
+      if not valid_uuid?(conversation_id),
+        do: {:ok, []},
+        else: do_get_messages(conversation_id, opts)
     end
 
     defp do_get_messages(conversation_id, opts) do

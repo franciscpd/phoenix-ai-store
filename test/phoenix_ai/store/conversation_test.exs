@@ -69,7 +69,9 @@ defmodule PhoenixAI.Store.ConversationTest do
       assert result.id == "conv-1"
       assert result.metadata == %{"key" => "val"}
       assert length(result.messages) == 2
-      assert [%PhoenixAI.Message{role: :user}, %PhoenixAI.Message{role: :assistant}] = result.messages
+
+      assert [%PhoenixAI.Message{role: :user}, %PhoenixAI.Message{role: :assistant}] =
+               result.messages
     end
 
     test "converts with empty messages" do
