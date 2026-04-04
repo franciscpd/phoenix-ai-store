@@ -9,11 +9,16 @@ defmodule PhoenixAI.Store.Adapters.ETS do
 
   - Conversations: `{{:conversation, id}, %Conversation{}}`
   - Messages: `{{:message, conversation_id, message_id}, %Message{}}`
+  - Facts: `{{:fact, user_id, key}, %Fact{}}`
+  - Profiles: `{{:profile, user_id}, %Profile{}}`
   """
 
   @behaviour PhoenixAI.Store.Adapter
+  @behaviour PhoenixAI.Store.Adapter.FactStore
+  @behaviour PhoenixAI.Store.Adapter.ProfileStore
 
   alias PhoenixAI.Store.{Conversation, Message}
+  alias PhoenixAI.Store.LongTermMemory.{Fact, Profile}
 
   @impl true
   def save_conversation(%Conversation{} = conversation, opts) do
@@ -185,4 +190,107 @@ defmodule PhoenixAI.Store.Adapters.ETS do
 
   defp maybe_limit(conversations, nil), do: conversations
   defp maybe_limit(conversations, limit), do: Enum.take(conversations, limit)
+
+  # -- FactStore callbacks --
+
+  @impl PhoenixAI.Store.Adapter.FactStore
+  def save_fact(%Fact{} = fact, opts) do
+    table = Keyword.fetch!(opts, :table)
+    now = DateTime.utc_now()
+
+    fact =
+      case :ets.match_object(table, {{:fact, fact.user_id, fact.key}, :_}) do
+        [{_key, existing}] ->
+          %{
+            fact
+            | id: existing.id,
+              inserted_at: existing.inserted_at,
+              updated_at: now
+          }
+
+        [] ->
+          %{
+            fact
+            | id: fact.id || Uniq.UUID.uuid7(),
+              inserted_at: fact.inserted_at || now,
+              updated_at: fact.updated_at || now
+          }
+      end
+
+    :ets.insert(table, {{:fact, fact.user_id, fact.key}, fact})
+    {:ok, fact}
+  end
+
+  @impl PhoenixAI.Store.Adapter.FactStore
+  def get_facts(user_id, opts) do
+    table = Keyword.fetch!(opts, :table)
+
+    facts =
+      :ets.match_object(table, {{:fact, user_id, :_}, :_})
+      |> Enum.map(fn {_key, fact} -> fact end)
+      |> Enum.sort_by(& &1.inserted_at, {:asc, DateTime})
+
+    {:ok, facts}
+  end
+
+  @impl PhoenixAI.Store.Adapter.FactStore
+  def delete_fact(user_id, key, opts) do
+    table = Keyword.fetch!(opts, :table)
+    :ets.delete(table, {:fact, user_id, key})
+    :ok
+  end
+
+  @impl PhoenixAI.Store.Adapter.FactStore
+  def count_facts(user_id, opts) do
+    table = Keyword.fetch!(opts, :table)
+    count = :ets.match_object(table, {{:fact, user_id, :_}, :_}) |> length()
+    {:ok, count}
+  end
+
+  # -- ProfileStore callbacks --
+
+  @impl PhoenixAI.Store.Adapter.ProfileStore
+  def save_profile(%Profile{} = profile, opts) do
+    table = Keyword.fetch!(opts, :table)
+    now = DateTime.utc_now()
+
+    profile =
+      case :ets.lookup(table, {:profile, profile.user_id}) do
+        [{_key, existing}] ->
+          %{
+            profile
+            | id: existing.id,
+              inserted_at: existing.inserted_at,
+              updated_at: now
+          }
+
+        [] ->
+          %{
+            profile
+            | id: profile.id || Uniq.UUID.uuid7(),
+              inserted_at: profile.inserted_at || now,
+              updated_at: profile.updated_at || now
+          }
+      end
+
+    :ets.insert(table, {{:profile, profile.user_id}, profile})
+    {:ok, profile}
+  end
+
+  @impl PhoenixAI.Store.Adapter.ProfileStore
+  def load_profile(user_id, opts) do
+    table = Keyword.fetch!(opts, :table)
+
+    case :ets.lookup(table, {:profile, user_id}) do
+      [{_key, profile}] -> {:ok, profile}
+      [] -> {:error, :not_found}
+    end
+  end
+
+  @impl PhoenixAI.Store.Adapter.ProfileStore
+  def delete_profile(user_id, opts) do
+    table = Keyword.fetch!(opts, :table)
+    :ets.delete(table, {:profile, user_id})
+    :ok
+  end
 end
