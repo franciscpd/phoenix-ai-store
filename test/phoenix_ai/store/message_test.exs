@@ -16,6 +16,17 @@ defmodule PhoenixAI.Store.MessageTest do
       assert msg.metadata == %{}
       assert msg.token_count == nil
       assert msg.inserted_at == nil
+      assert msg.pinned == false
+    end
+
+    test "pinned defaults to false" do
+      msg = %Message{}
+      assert msg.pinned == false
+    end
+
+    test "pinned can be set to true" do
+      msg = %Message{pinned: true}
+      assert msg.pinned == true
     end
 
     test "creates with all fields" do
@@ -79,6 +90,14 @@ defmodule PhoenixAI.Store.MessageTest do
       assert result.tool_call_id == nil
       assert result.tool_calls == nil
       assert result.metadata == %{}
+    end
+
+    test "does not include pinned field" do
+      store_msg = %Message{role: :user, content: "Hello", pinned: true}
+
+      result = Message.to_phoenix_ai(store_msg)
+
+      refute Map.has_key?(Map.from_struct(result), :pinned)
     end
   end
 

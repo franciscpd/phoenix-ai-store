@@ -32,6 +32,7 @@ defmodule PhoenixAI.Store.Test.Repo.Migrations.CreateStoreTables do
       add(:tool_call_id, :string)
       add(:tool_calls, {:array, :map})
       add(:token_count, :integer)
+      add(:pinned, :boolean, default: false, null: false)
       add(:metadata, :map, default: %{})
       timestamps(inserted_at: :inserted_at, updated_at: false, type: :utc_datetime_usec)
     end

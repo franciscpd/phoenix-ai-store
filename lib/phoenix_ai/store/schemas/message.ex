@@ -21,6 +21,7 @@ if Code.ensure_loaded?(Ecto) do
       field :tool_call_id, :string
       field :tool_calls, {:array, :map}
       field :token_count, :integer
+      field :pinned, :boolean, default: false
       field :metadata, :map, default: %{}
 
       belongs_to :conversation, ConversationSchema, type: :binary_id
@@ -28,7 +29,7 @@ if Code.ensure_loaded?(Ecto) do
       timestamps()
     end
 
-    @cast_fields ~w(id role content tool_call_id tool_calls token_count metadata conversation_id)a
+    @cast_fields ~w(id role content tool_call_id tool_calls token_count pinned metadata conversation_id)a
     @required_fields ~w(role conversation_id)a
     @valid_roles ~w(system user assistant tool)
 
@@ -50,6 +51,7 @@ if Code.ensure_loaded?(Ecto) do
         tool_call_id: schema.tool_call_id,
         tool_calls: schema.tool_calls,
         token_count: schema.token_count,
+        pinned: schema.pinned || false,
         metadata: schema.metadata || %{},
         inserted_at: schema.inserted_at
       }
@@ -65,6 +67,7 @@ if Code.ensure_loaded?(Ecto) do
         tool_call_id: msg.tool_call_id,
         tool_calls: msg.tool_calls,
         token_count: msg.token_count,
+        pinned: msg.pinned || false,
         metadata: msg.metadata || %{}
       }
     end

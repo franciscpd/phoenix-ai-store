@@ -14,6 +14,7 @@ defmodule PhoenixAI.Store.Message do
           tool_calls: [map()] | nil,
           metadata: map(),
           token_count: non_neg_integer() | nil,
+          pinned: boolean(),
           inserted_at: DateTime.t() | nil
         }
 
@@ -26,6 +27,7 @@ defmodule PhoenixAI.Store.Message do
     :tool_calls,
     :inserted_at,
     token_count: nil,
+    pinned: false,
     metadata: %{}
   ]
 
