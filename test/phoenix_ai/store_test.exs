@@ -247,4 +247,68 @@ defmodule PhoenixAI.StoreTest do
       assert Process.whereis(:"#{store}_table_owner") != nil
     end
   end
+
+  describe "apply_memory/3" do
+    test "applies pipeline and returns PhoenixAI.Message structs", %{store: store} do
+      {:ok, conv} = Store.save_conversation(%Conversation{title: "Memory"}, store: store)
+
+      {:ok, _} =
+        Store.add_message(conv.id, %Message{role: :user, content: "Hello"}, store: store)
+
+      {:ok, _} =
+        Store.add_message(conv.id, %Message{role: :assistant, content: "Hi"}, store: store)
+
+      pipeline = PhoenixAI.Store.Memory.Pipeline.preset(:default)
+      {:ok, result} = Store.apply_memory(conv.id, pipeline, store: store)
+
+      assert length(result) == 2
+      assert [%PhoenixAI.Message{}, %PhoenixAI.Message{}] = result
+      assert hd(result).role == :user
+      assert hd(result).content == "Hello"
+    end
+
+    test "preserves system messages through pipeline", %{store: store} do
+      {:ok, conv} = Store.save_conversation(%Conversation{title: "System"}, store: store)
+
+      {:ok, _} =
+        Store.add_message(
+          conv.id,
+          %Message{role: :system, content: "You are helpful"},
+          store: store
+        )
+
+      for i <- 1..5 do
+        {:ok, _} =
+          Store.add_message(
+            conv.id,
+            %Message{role: :user, content: "Msg #{i}"},
+            store: store
+          )
+
+        Process.sleep(1)
+      end
+
+      # SlidingWindow keeps last 2 non-pinned, but system message is always preserved
+      pipeline =
+        PhoenixAI.Store.Memory.Pipeline.new([
+          {PhoenixAI.Store.Memory.Strategies.SlidingWindow, [last: 2]}
+        ])
+
+      {:ok, result} = Store.apply_memory(conv.id, pipeline, store: store)
+
+      # System message + 2 most recent
+      assert length(result) == 3
+      assert hd(result).role == :system
+      assert hd(result).content == "You are helpful"
+    end
+
+    test "works with empty conversation", %{store: store} do
+      {:ok, conv} = Store.save_conversation(%Conversation{title: "Empty"}, store: store)
+
+      pipeline = PhoenixAI.Store.Memory.Pipeline.preset(:default)
+      {:ok, result} = Store.apply_memory(conv.id, pipeline, store: store)
+
+      assert result == []
+    end
+  end
 end

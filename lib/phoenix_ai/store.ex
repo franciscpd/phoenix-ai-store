@@ -22,6 +22,7 @@ defmodule PhoenixAI.Store do
   use Supervisor
 
   alias PhoenixAI.Store.{Config, Conversation, Instance, Message}
+  alias PhoenixAI.Store.Memory.Pipeline
 
   # -- Supervisor --
 
@@ -211,6 +212,46 @@ defmodule PhoenixAI.Store do
       {adapter, adapter_opts, _config} = resolve_adapter(opts)
       result = adapter.get_messages(conversation_id, adapter_opts)
       {result, %{}}
+    end)
+  end
+
+  @doc """
+  Applies a memory pipeline to a conversation's messages.
+
+  Fetches raw messages from the adapter, runs the pipeline (which handles
+  pinned message extraction, strategy sorting/execution, and re-injection),
+  then converts the result to `%PhoenixAI.Message{}` structs.
+
+  ## Options
+
+    * `:store` - the store name (default: `:phoenix_ai_store_default`)
+    * `:model` - model override for strategy context
+    * `:provider` - provider override for strategy context
+    * `:max_tokens` - token budget override
+    * `:token_counter` - token counter module override
+  """
+  @spec apply_memory(String.t(), Pipeline.t(), keyword()) ::
+          {:ok, [PhoenixAI.Message.t()]} | {:error, term()}
+  def apply_memory(conversation_id, %Pipeline{} = pipeline, opts \\ []) do
+    :telemetry.span([:phoenix_ai_store, :memory, :apply], %{}, fn ->
+      {adapter, adapter_opts, config} = resolve_adapter(opts)
+
+      context = %{
+        conversation_id: conversation_id,
+        model: Keyword.get(opts, :model, config[:model]),
+        provider: Keyword.get(opts, :provider, config[:provider]),
+        max_tokens: Keyword.get(opts, :max_tokens),
+        token_counter:
+          Keyword.get(opts, :token_counter, PhoenixAI.Store.Memory.TokenCounter.Default)
+      }
+
+      with {:ok, messages} <- adapter.get_messages(conversation_id, adapter_opts),
+           {:ok, filtered} <- Pipeline.run(pipeline, messages, context) do
+        result = {:ok, Enum.map(filtered, &Message.to_phoenix_ai/1)}
+        {result, %{}}
+      else
+        {:error, _} = error -> {error, %{}}
+      end
     end)
   end
 
