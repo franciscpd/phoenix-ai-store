@@ -2,14 +2,19 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
   @shortdoc "Generates PhoenixAI.Store Ecto migration"
 
   @moduledoc """
-  Generates a migration file for the PhoenixAI.Store conversations and messages tables.
+  Generates a migration file for the PhoenixAI.Store tables.
 
       $ mix phoenix_ai_store.gen.migration
+
+  For existing installations that need to add Long-Term Memory tables:
+
+      $ mix phoenix_ai_store.gen.migration --ltm
 
   ## Options
 
     * `--prefix` - Table name prefix (default: `phoenix_ai_store_`)
     * `--migrations-path` - Output directory (default: `priv/repo/migrations`)
+    * `--ltm` - Generate only the Long-Term Memory tables (facts, profiles)
 
   """
 
@@ -22,25 +27,29 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
   def run(args) do
     {opts, _, _} =
       OptionParser.parse(args,
-        strict: [prefix: :string, migrations_path: :string]
+        strict: [prefix: :string, migrations_path: :string, ltm: :boolean]
       )
 
     prefix = Keyword.get(opts, :prefix, @default_prefix)
     migrations_path = Keyword.get(opts, :migrations_path, @default_migrations_path)
+    ltm_only = Keyword.get(opts, :ltm, false)
 
     File.mkdir_p!(migrations_path)
 
-    # Check idempotency — look for existing migration
     slug = slug_from_prefix(prefix)
 
-    existing =
-      Path.wildcard(Path.join(migrations_path, "*_create_#{slug}_tables.exs"))
-
-    if existing != [] do
-      Mix.shell().info("Migration already exists: #{hd(existing)}")
-      :ok
+    if ltm_only do
+      generate_ltm_migration(prefix, slug, migrations_path)
     else
-      generate_migration(prefix, slug, migrations_path)
+      existing =
+        Path.wildcard(Path.join(migrations_path, "*_create_#{slug}_tables.exs"))
+
+      if existing != [] do
+        Mix.shell().info("Migration already exists: #{hd(existing)}")
+        :ok
+      else
+        generate_migration(prefix, slug, migrations_path)
+      end
     end
   end
 
@@ -66,6 +75,29 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
     Mix.Generator.create_file(filepath, content)
   end
 
+  defp generate_ltm_migration(prefix, slug, migrations_path) do
+    existing =
+      Path.wildcard(Path.join(migrations_path, "*_add_#{slug}_ltm_tables.exs"))
+
+    if existing != [] do
+      Mix.shell().info("LTM migration already exists: #{hd(existing)}")
+      :ok
+    else
+      template_path = find_ltm_template()
+      timestamp = generate_timestamp()
+      migration_module = module_from_prefix(prefix)
+      repo_module = detect_repo_module()
+
+      assigns = [prefix: prefix, migration_module: migration_module, repo_module: repo_module]
+      content = EEx.eval_file(template_path, assigns: assigns)
+
+      filename = "#{timestamp}_add_#{slug}_ltm_tables.exs"
+      filepath = Path.join(migrations_path, filename)
+
+      Mix.Generator.create_file(filepath, content)
+    end
+  end
+
   defp find_template do
     # Try Application.app_dir first, fall back to cwd for dev/test
     case Application.app_dir(:phoenix_ai_store, "priv/templates/migration.exs.eex") do
@@ -78,6 +110,19 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
 
   defp fallback_template_path do
     Path.join([File.cwd!(), "priv", "templates", "migration.exs.eex"])
+  end
+
+  defp find_ltm_template do
+    case Application.app_dir(:phoenix_ai_store, "priv/templates/ltm_migration.exs.eex") do
+      path when is_binary(path) ->
+        if File.exists?(path), do: path, else: fallback_ltm_template_path()
+    end
+  rescue
+    _ -> fallback_ltm_template_path()
+  end
+
+  defp fallback_ltm_template_path do
+    Path.join([File.cwd!(), "priv", "templates", "ltm_migration.exs.eex"])
   end
 
   defp generate_timestamp do
