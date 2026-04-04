@@ -5,6 +5,7 @@ config :phoenix_ai_store, PhoenixAI.Store.Test.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
+  port: 5434,
   pool: Ecto.Adapters.SQL.Sandbox
 
 config :phoenix_ai_store, ecto_repos: [PhoenixAI.Store.Test.Repo]
