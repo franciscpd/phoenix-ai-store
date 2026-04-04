@@ -1,0 +1,43 @@
+if Code.ensure_loaded?(Ecto) do
+  defmodule PhoenixAI.Store.Schemas.Profile do
+    use Ecto.Schema
+    import Ecto.Changeset
+
+    alias PhoenixAI.Store.LongTermMemory.Profile, as: StoreProfile
+
+    @primary_key {:id, :binary_id, autogenerate: false}
+    @timestamps_opts [type: :utc_datetime_usec]
+
+    schema "phoenix_ai_store_profiles" do
+      field :user_id, :string
+      field :summary, :string
+      field :metadata, :map, default: %{}
+      timestamps()
+    end
+
+    @cast_fields ~w(id user_id summary metadata)a
+    @required_fields ~w(user_id)a
+
+    def changeset(schema \\ %__MODULE__{}, attrs) do
+      schema
+      |> cast(attrs, @cast_fields)
+      |> validate_required(@required_fields)
+      |> unique_constraint(:user_id)
+    end
+
+    def to_store_struct(%__MODULE__{} = schema) do
+      %StoreProfile{
+        id: schema.id,
+        user_id: schema.user_id,
+        summary: schema.summary,
+        metadata: schema.metadata || %{},
+        inserted_at: schema.inserted_at,
+        updated_at: schema.updated_at
+      }
+    end
+
+    def from_store_struct(%StoreProfile{} = profile) do
+      %{id: profile.id, user_id: profile.user_id, summary: profile.summary, metadata: profile.metadata || %{}}
+    end
+  end
+end

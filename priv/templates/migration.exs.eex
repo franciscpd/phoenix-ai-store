@@ -37,5 +37,26 @@ defmodule <%= @repo_module %>.Migrations.Create<%= @migration_module %>Tables do
 
     create index(:<%= @prefix %>messages, [:conversation_id])
     create index(:<%= @prefix %>messages, [:conversation_id, :inserted_at])
+
+    create table(:<%= @prefix %>facts, primary_key: false) do
+      add :id, :binary_id, primary_key: true
+      add :user_id, :string, null: false
+      add :key, :string, null: false
+      add :value, :text, null: false
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create unique_index(:<%= @prefix %>facts, [:user_id, :key])
+    create index(:<%= @prefix %>facts, [:user_id])
+
+    create table(:<%= @prefix %>profiles, primary_key: false) do
+      add :id, :binary_id, primary_key: true
+      add :user_id, :string, null: false
+      add :summary, :text
+      add :metadata, :map, default: %{}
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create unique_index(:<%= @prefix %>profiles, [:user_id])
   end
 end

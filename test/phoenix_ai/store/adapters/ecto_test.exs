@@ -7,4 +7,6 @@ defmodule PhoenixAI.Store.Adapters.EctoTest do
   end
 
   use PhoenixAI.Store.AdapterContractTest, adapter: PhoenixAI.Store.Adapters.Ecto
+  use PhoenixAI.Store.FactStoreContractTest, adapter: PhoenixAI.Store.Adapters.Ecto
+  use PhoenixAI.Store.ProfileStoreContractTest, adapter: PhoenixAI.Store.Adapters.Ecto
 end

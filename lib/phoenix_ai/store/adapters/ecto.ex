@@ -10,12 +10,17 @@ if Code.ensure_loaded?(Ecto) do
     """
 
     @behaviour PhoenixAI.Store.Adapter
+    @behaviour PhoenixAI.Store.Adapter.FactStore
+    @behaviour PhoenixAI.Store.Adapter.ProfileStore
 
     import Ecto.Query
 
     alias PhoenixAI.Store.{Conversation, Message}
     alias PhoenixAI.Store.Schemas.Conversation, as: ConvSchema
     alias PhoenixAI.Store.Schemas.Message, as: MsgSchema
+    alias PhoenixAI.Store.LongTermMemory.{Fact, Profile}
+    alias PhoenixAI.Store.Schemas.Fact, as: FactSchema
+    alias PhoenixAI.Store.Schemas.Profile, as: ProfileSchema
 
     @impl true
     def save_conversation(%Conversation{} = conversation, opts) do
@@ -156,6 +161,99 @@ if Code.ensure_loaded?(Ecto) do
       {:ok, messages}
     end
 
+    # -- FactStore --
+
+    @impl PhoenixAI.Store.Adapter.FactStore
+    def save_fact(%Fact{} = fact, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+      attrs = FactSchema.from_store_struct(fact)
+
+      case repo.one(from(f in fact_source(opts), where: f.user_id == ^fact.user_id and f.key == ^fact.key)) do
+        nil ->
+          attrs = Map.put_new(attrs, :id, Uniq.UUID.uuid7())
+
+          %FactSchema{}
+          |> Ecto.put_meta(source: fact_table_name(opts))
+          |> FactSchema.changeset(attrs)
+          |> repo.insert()
+          |> handle_fact_result()
+
+        existing ->
+          existing
+          |> FactSchema.changeset(attrs)
+          |> repo.update()
+          |> handle_fact_result()
+      end
+    end
+
+    @impl PhoenixAI.Store.Adapter.FactStore
+    def get_facts(user_id, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+
+      facts =
+        from(f in fact_source(opts), where: f.user_id == ^user_id, order_by: [asc: f.inserted_at])
+        |> repo.all()
+        |> Enum.map(&FactSchema.to_store_struct/1)
+
+      {:ok, facts}
+    end
+
+    @impl PhoenixAI.Store.Adapter.FactStore
+    def delete_fact(user_id, key, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+      from(f in fact_source(opts), where: f.user_id == ^user_id and f.key == ^key) |> repo.delete_all()
+      :ok
+    end
+
+    @impl PhoenixAI.Store.Adapter.FactStore
+    def count_facts(user_id, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+      count = from(f in fact_source(opts), where: f.user_id == ^user_id, select: count(f.id)) |> repo.one()
+      {:ok, count}
+    end
+
+    # -- ProfileStore --
+
+    @impl PhoenixAI.Store.Adapter.ProfileStore
+    def save_profile(%Profile{} = profile, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+      attrs = ProfileSchema.from_store_struct(profile)
+
+      case repo.one(from(p in profile_source(opts), where: p.user_id == ^profile.user_id)) do
+        nil ->
+          attrs = Map.put_new(attrs, :id, Uniq.UUID.uuid7())
+
+          %ProfileSchema{}
+          |> Ecto.put_meta(source: profile_table_name(opts))
+          |> ProfileSchema.changeset(attrs)
+          |> repo.insert()
+          |> handle_profile_result()
+
+        existing ->
+          existing
+          |> ProfileSchema.changeset(attrs)
+          |> repo.update()
+          |> handle_profile_result()
+      end
+    end
+
+    @impl PhoenixAI.Store.Adapter.ProfileStore
+    def load_profile(user_id, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+
+      case repo.one(from(p in profile_source(opts), where: p.user_id == ^user_id)) do
+        nil -> {:error, :not_found}
+        schema -> {:ok, ProfileSchema.to_store_struct(schema)}
+      end
+    end
+
+    @impl PhoenixAI.Store.Adapter.ProfileStore
+    def delete_profile(user_id, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+      from(p in profile_source(opts), where: p.user_id == ^user_id) |> repo.delete_all()
+      :ok
+    end
+
     # -- Private Helpers --
 
     defp apply_filters(query, []), do: query
@@ -228,6 +326,17 @@ if Code.ensure_loaded?(Ecto) do
 
     defp handle_delete_result({:ok, _schema}), do: :ok
     defp handle_delete_result({:error, changeset}), do: {:error, changeset}
+
+    defp fact_source(opts), do: {fact_table_name(opts), FactSchema}
+    defp profile_source(opts), do: {profile_table_name(opts), ProfileSchema}
+    defp fact_table_name(opts), do: Keyword.get(opts, :prefix, "phoenix_ai_store_") <> "facts"
+    defp profile_table_name(opts), do: Keyword.get(opts, :prefix, "phoenix_ai_store_") <> "profiles"
+
+    defp handle_fact_result({:ok, schema}), do: {:ok, FactSchema.to_store_struct(schema)}
+    defp handle_fact_result({:error, changeset}), do: {:error, changeset}
+
+    defp handle_profile_result({:ok, schema}), do: {:ok, ProfileSchema.to_store_struct(schema)}
+    defp handle_profile_result({:error, changeset}), do: {:error, changeset}
 
     defp valid_uuid?(id) when is_binary(id) do
       case Ecto.UUID.cast(id) do
