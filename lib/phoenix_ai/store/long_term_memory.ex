@@ -130,6 +130,110 @@ defmodule PhoenixAI.Store.LongTermMemory do
     end
   end
 
+  # -- Profile Update --
+
+  @spec update_profile(String.t(), keyword()) :: {:ok, Profile.t()} | {:error, term()}
+  def update_profile(user_id, opts \\ []) do
+    {adapter, adapter_opts} = resolve_adapter(opts)
+    check_profile_store!(adapter)
+    check_fact_store!(adapter)
+
+    existing_profile =
+      case adapter.load_profile(user_id, adapter_opts) do
+        {:ok, profile} -> profile
+        {:error, :not_found} -> nil
+      end
+
+    {:ok, facts} = adapter.get_facts(user_id, adapter_opts)
+
+    context = %{
+      user_id: user_id,
+      provider: Keyword.get(opts, :provider),
+      model: Keyword.get(opts, :model)
+    }
+
+    case do_update_profile(existing_profile, facts, context, opts) do
+      {:ok, %{summary: summary, metadata: metadata}} ->
+        profile = %Profile{
+          user_id: user_id,
+          summary: summary,
+          metadata: metadata || %{}
+        }
+
+        adapter.save_profile(profile, adapter_opts)
+
+      {:error, reason} ->
+        {:error, {:profile_update_failed, reason}}
+    end
+  end
+
+  defp do_update_profile(existing_profile, facts, context, opts) do
+    case Keyword.get(opts, :profile_fn) do
+      nil -> call_profile_ai(existing_profile, facts, context, opts)
+      fun when is_function(fun, 4) -> fun.(existing_profile, facts, context, opts)
+    end
+  end
+
+  defp call_profile_ai(existing_profile, facts, context, opts) do
+    provider = Keyword.get(opts, :provider, context[:provider])
+    model = Keyword.get(opts, :model, context[:model])
+
+    unless provider do
+      raise ArgumentError,
+            "Profile update requires :provider in context or opts."
+    end
+
+    facts_text =
+      facts
+      |> Enum.map(fn f -> "- #{f.key}: #{f.value}" end)
+      |> Enum.join("\n")
+
+    existing_text =
+      if existing_profile && existing_profile.summary do
+        "Current profile:\n#{existing_profile.summary}\n\n"
+      else
+        ""
+      end
+
+    prompt = [
+      %PhoenixAI.Message{
+        role: :system,
+        content: """
+        You are updating a user profile based on known facts.
+        #{existing_text}User facts:
+        #{facts_text}
+
+        Generate a concise user profile summary (2-3 sentences) and structured metadata.
+        Return JSON: {"summary": "...", "metadata": {"key": "value", ...}}
+        Output ONLY the JSON, no preamble.
+        """
+      },
+      %PhoenixAI.Message{
+        role: :user,
+        content: "Generate the updated profile."
+      }
+    ]
+
+    ai_opts =
+      [provider: provider, model: model]
+      |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+
+    case AI.chat(prompt, ai_opts) do
+      {:ok, response} -> parse_profile_response(response.content)
+      {:error, _} = error -> error
+    end
+  end
+
+  defp parse_profile_response(json_string) do
+    case Jason.decode(json_string) do
+      {:ok, %{"summary" => summary} = data} ->
+        {:ok, %{summary: summary, metadata: Map.get(data, "metadata", %{})}}
+
+      _ ->
+        {:error, {:parse_error, json_string}}
+    end
+  end
+
   # -- Private --
 
   defp resolve_adapter(opts) do

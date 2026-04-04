@@ -132,4 +132,60 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
       assert {:ok, []} = LongTermMemory.extract_facts(conv.id, store: store, extract_fn: extract_fn, provider: :test)
     end
   end
+
+  describe "update_profile/2" do
+    test "creates a new profile from facts", %{store: store} do
+      {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "u1", key: "lang", value: "pt"}, store: store)
+      {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "u1", key: "role", value: "dev"}, store: store)
+
+      profile_fn = fn _profile, _facts, _context, _opts ->
+        {:ok, %{summary: "Portuguese-speaking developer.", metadata: %{"level" => "mid"}}}
+      end
+
+      assert {:ok, profile} =
+               LongTermMemory.update_profile("u1",
+                 store: store,
+                 profile_fn: profile_fn,
+                 provider: :test
+               )
+
+      assert profile.summary == "Portuguese-speaking developer."
+      assert profile.metadata == %{"level" => "mid"}
+    end
+
+    test "refines existing profile", %{store: store} do
+      {:ok, _} =
+        LongTermMemory.save_profile(
+          %Profile{user_id: "u1", summary: "A developer.", metadata: %{}},
+          store: store
+        )
+
+      {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "u1", key: "lang", value: "pt"}, store: store)
+
+      profile_fn = fn existing_profile, _facts, _ctx, _opts ->
+        assert existing_profile.summary == "A developer."
+        {:ok, %{summary: "A Portuguese-speaking developer.", metadata: %{}}}
+      end
+
+      assert {:ok, profile} =
+               LongTermMemory.update_profile("u1",
+                 store: store,
+                 profile_fn: profile_fn,
+                 provider: :test
+               )
+
+      assert profile.summary =~ "Portuguese"
+    end
+
+    test "returns error when profile_fn fails", %{store: store} do
+      profile_fn = fn _p, _f, _c, _o -> {:error, :ai_failed} end
+
+      assert {:error, {:profile_update_failed, :ai_failed}} =
+               LongTermMemory.update_profile("u1",
+                 store: store,
+                 profile_fn: profile_fn,
+                 provider: :test
+               )
+    end
+  end
 end
