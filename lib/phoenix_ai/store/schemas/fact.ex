@@ -1,5 +1,16 @@
 if Code.ensure_loaded?(Ecto) do
   defmodule PhoenixAI.Store.Schemas.Fact do
+    @moduledoc """
+    Ecto schema for cross-conversation facts in long-term memory.
+
+    Maps to the `phoenix_ai_store_facts` table. Facts are keyed by
+    `{user_id, key}` with a unique constraint, so saving a fact with an
+    existing key performs an upsert (only `value` and `updated_at` are
+    replaced). Facts are extracted automatically via
+    `LongTermMemory.extract_facts/2` or written manually via
+    `LongTermMemory.save_fact/2`.
+    """
+
     use Ecto.Schema
     import Ecto.Changeset
 

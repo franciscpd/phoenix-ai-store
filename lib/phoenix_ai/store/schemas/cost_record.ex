@@ -1,5 +1,15 @@
 if Code.ensure_loaded?(Ecto) do
   defmodule PhoenixAI.Store.Schemas.CostRecord do
+    @moduledoc """
+    Ecto schema for cost records tracking AI usage expenses.
+
+    Maps to the `phoenix_ai_store_cost_records` table. One row is inserted per
+    AI provider call via `Store.record_cost/3`. Cost fields (`input_cost`,
+    `output_cost`, `total_cost`) use `Decimal` to avoid floating-point rounding
+    errors when aggregating across many records. Records are immutable once
+    written — use `Store.sum_cost/2` for aggregated reporting.
+    """
+
     use Ecto.Schema
     import Ecto.Changeset
 

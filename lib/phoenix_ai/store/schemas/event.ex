@@ -1,5 +1,15 @@
 if Code.ensure_loaded?(Ecto) do
   defmodule PhoenixAI.Store.Schemas.Event do
+    @moduledoc """
+    Ecto schema for the append-only audit event log.
+
+    Maps to the `phoenix_ai_store_events` table. Rows are insert-only — this
+    schema intentionally has no update or delete path. Events are written via
+    `Store.log_event/2` or `Store.track/1` and queried via `Store.list_events/2`
+    and `Store.count_events/2`. The `type` field is stored as a string and
+    round-tripped to/from atoms via `to_store_struct/1`.
+    """
+
     use Ecto.Schema
     import Ecto.Changeset
 
