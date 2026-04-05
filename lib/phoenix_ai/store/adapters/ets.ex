@@ -16,6 +16,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
   @behaviour PhoenixAI.Store.Adapter
   @behaviour PhoenixAI.Store.Adapter.FactStore
   @behaviour PhoenixAI.Store.Adapter.ProfileStore
+  @behaviour PhoenixAI.Store.Adapter.TokenUsage
 
   alias PhoenixAI.Store.{Conversation, Message}
   alias PhoenixAI.Store.LongTermMemory.{Fact, Profile}
@@ -292,5 +293,38 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     table = Keyword.fetch!(opts, :table)
     :ets.delete(table, {:profile, user_id})
     :ok
+  end
+
+  # -- TokenUsage callbacks --
+
+  @impl PhoenixAI.Store.Adapter.TokenUsage
+  def sum_conversation_tokens(conversation_id, opts) do
+    table = Keyword.fetch!(opts, :table)
+
+    total =
+      :ets.match_object(table, {{:message, conversation_id, :_}, :_})
+      |> Enum.reduce(0, fn {_key, msg}, acc -> acc + (msg.token_count || 0) end)
+
+    {:ok, total}
+  end
+
+  @impl PhoenixAI.Store.Adapter.TokenUsage
+  def sum_user_tokens(user_id, opts) do
+    table = Keyword.fetch!(opts, :table)
+
+    conversation_ids =
+      :ets.match_object(table, {{:conversation, :_}, :_})
+      |> Enum.filter(fn {_key, conv} -> conv.user_id == user_id end)
+      |> Enum.map(fn {_key, conv} -> conv.id end)
+
+    total =
+      Enum.reduce(conversation_ids, 0, fn conv_id, acc ->
+        :ets.match_object(table, {{:message, conv_id, :_}, :_})
+        |> Enum.reduce(acc, fn {_key, msg}, inner_acc ->
+          inner_acc + (msg.token_count || 0)
+        end)
+      end)
+
+    {:ok, total}
   end
 end
