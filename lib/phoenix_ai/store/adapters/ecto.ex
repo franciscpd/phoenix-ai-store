@@ -29,6 +29,7 @@ if Code.ensure_loaded?(Ecto) do
     alias PhoenixAI.Store.EventLog.Event
     alias PhoenixAI.Store.Schemas.Event, as: EventSchema
 
+    @doc "Inserts or updates a conversation row in the database via the configured Repo."
     @impl true
     def save_conversation(%Conversation{} = conversation, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -50,6 +51,7 @@ if Code.ensure_loaded?(Ecto) do
       end
     end
 
+    @doc "Loads a conversation by ID from the database, preloading messages ordered by `inserted_at`."
     @impl true
     def load_conversation(id, opts) do
       if not valid_uuid?(id), do: {:error, :not_found}, else: do_load_conversation(id, opts)
@@ -69,6 +71,7 @@ if Code.ensure_loaded?(Ecto) do
       end
     end
 
+    @doc "Queries conversations from the database with optional filters, ordered by `inserted_at` descending."
     @impl true
     def list_conversations(filters, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -84,6 +87,7 @@ if Code.ensure_loaded?(Ecto) do
       {:ok, conversations}
     end
 
+    @doc "Deletes a conversation row from the database. Returns `{:error, :not_found}` if absent."
     @impl true
     def delete_conversation(id, opts) do
       if not valid_uuid?(id), do: {:error, :not_found}, else: do_delete_conversation(id, opts)
@@ -98,6 +102,7 @@ if Code.ensure_loaded?(Ecto) do
       end
     end
 
+    @doc "Counts conversation rows matching the given filters using a database `COUNT` query."
     @impl true
     def count_conversations(filters, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -109,6 +114,7 @@ if Code.ensure_loaded?(Ecto) do
       {:ok, repo.one(query)}
     end
 
+    @doc "Checks whether a conversation exists in the database using `Repo.exists?/1`."
     @impl true
     def conversation_exists?(id, opts) do
       if not valid_uuid?(id), do: {:ok, false}, else: do_conversation_exists?(id, opts)
@@ -119,6 +125,7 @@ if Code.ensure_loaded?(Ecto) do
       {:ok, repo.exists?(from(c in conv_source(opts), where: c.id == ^id))}
     end
 
+    @doc "Inserts a message row into the database. Returns `{:error, :not_found}` if the conversation does not exist."
     @impl true
     def add_message(conversation_id, %Message{} = message, opts) do
       if not valid_uuid?(conversation_id) do
@@ -147,6 +154,7 @@ if Code.ensure_loaded?(Ecto) do
       end
     end
 
+    @doc "Queries all messages for a conversation from the database, ordered by `inserted_at` ascending."
     @impl true
     def get_messages(conversation_id, opts) do
       if not valid_uuid?(conversation_id),
@@ -170,6 +178,7 @@ if Code.ensure_loaded?(Ecto) do
 
     # -- FactStore --
 
+    @doc "Upserts a fact row in the database using `ON CONFLICT DO UPDATE` on `{user_id, key}`."
     @impl PhoenixAI.Store.Adapter.FactStore
     def save_fact(%Fact{} = fact, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -186,6 +195,7 @@ if Code.ensure_loaded?(Ecto) do
       |> handle_fact_result()
     end
 
+    @doc "Queries all facts for a user from the database, ordered by `inserted_at` ascending."
     @impl PhoenixAI.Store.Adapter.FactStore
     def get_facts(user_id, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -198,6 +208,7 @@ if Code.ensure_loaded?(Ecto) do
       {:ok, facts}
     end
 
+    @doc "Deletes all fact rows matching `{user_id, key}` from the database."
     @impl PhoenixAI.Store.Adapter.FactStore
     def delete_fact(user_id, key, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -205,6 +216,7 @@ if Code.ensure_loaded?(Ecto) do
       :ok
     end
 
+    @doc "Counts fact rows for a user using a database `COUNT` query."
     @impl PhoenixAI.Store.Adapter.FactStore
     def count_facts(user_id, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -214,6 +226,7 @@ if Code.ensure_loaded?(Ecto) do
 
     # -- ProfileStore --
 
+    @doc "Upserts a profile row in the database using `ON CONFLICT DO UPDATE` on `user_id`."
     @impl PhoenixAI.Store.Adapter.ProfileStore
     def save_profile(%Profile{} = profile, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -230,6 +243,7 @@ if Code.ensure_loaded?(Ecto) do
       |> handle_profile_result()
     end
 
+    @doc "Loads a user profile from the database. Returns `{:error, :not_found}` if absent."
     @impl PhoenixAI.Store.Adapter.ProfileStore
     def load_profile(user_id, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -240,6 +254,7 @@ if Code.ensure_loaded?(Ecto) do
       end
     end
 
+    @doc "Deletes all profile rows for a user from the database."
     @impl PhoenixAI.Store.Adapter.ProfileStore
     def delete_profile(user_id, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -249,6 +264,7 @@ if Code.ensure_loaded?(Ecto) do
 
     # -- TokenUsage --
 
+    @doc "Sums `token_count` for all messages in a conversation using a database `SUM` aggregate."
     @impl PhoenixAI.Store.Adapter.TokenUsage
     def sum_conversation_tokens(conversation_id, opts) do
       if not valid_uuid?(conversation_id) do
@@ -267,6 +283,7 @@ if Code.ensure_loaded?(Ecto) do
       end
     end
 
+    @doc "Sums `token_count` across all messages in all conversations belonging to a user via a database join."
     @impl PhoenixAI.Store.Adapter.TokenUsage
     def sum_user_tokens(user_id, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -369,6 +386,7 @@ if Code.ensure_loaded?(Ecto) do
 
     # -- CostStore --
 
+    @doc "Inserts a cost record row into the database. Records are immutable once written."
     @impl PhoenixAI.Store.Adapter.CostStore
     def save_cost_record(%CostRecord{} = record, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -384,6 +402,7 @@ if Code.ensure_loaded?(Ecto) do
       |> handle_cost_record_result()
     end
 
+    @doc "Queries all cost records for a conversation from the database, ordered by `recorded_at` ascending."
     @impl PhoenixAI.Store.Adapter.CostStore
     def get_cost_records(conversation_id, opts) do
       if valid_uuid?(conversation_id) do
@@ -403,6 +422,7 @@ if Code.ensure_loaded?(Ecto) do
       end
     end
 
+    @doc "Sums `total_cost` across cost records matching the given filters using a database `SUM` aggregate."
     @impl PhoenixAI.Store.Adapter.CostStore
     def sum_cost(filters, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -478,6 +498,7 @@ if Code.ensure_loaded?(Ecto) do
 
     # -- EventStore --
 
+    @doc "Inserts an event row into the database. The event log is append-only — no updates or deletes."
     @impl PhoenixAI.Store.Adapter.EventStore
     def log_event(%Event{} = event, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -494,6 +515,7 @@ if Code.ensure_loaded?(Ecto) do
       |> handle_event_result()
     end
 
+    @doc "Queries a paginated, filtered list of events from the database with an opaque cursor for the next page."
     @impl PhoenixAI.Store.Adapter.EventStore
     def list_events(filters, opts) do
       repo = Keyword.fetch!(opts, :repo)
@@ -521,6 +543,7 @@ if Code.ensure_loaded?(Ecto) do
       {:ok, %{events: events, next_cursor: next_cursor}}
     end
 
+    @doc "Counts event rows matching the given filters using a database `COUNT` query."
     @impl PhoenixAI.Store.Adapter.EventStore
     def count_events(filters, opts) do
       repo = Keyword.fetch!(opts, :repo)
