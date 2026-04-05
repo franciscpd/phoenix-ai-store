@@ -355,9 +355,7 @@ defmodule PhoenixAI.Store.LongTermMemory do
     end
 
     facts_text =
-      facts
-      |> Enum.map(fn f -> "- #{f.key}: #{f.value}" end)
-      |> Enum.join("\n")
+      Enum.map_join(facts, "\n", fn f -> "- #{f.key}: #{f.value}" end)
 
     existing_text =
       if existing_profile && existing_profile.summary do

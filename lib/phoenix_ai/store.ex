@@ -282,31 +282,33 @@ defmodule PhoenixAI.Store do
           Keyword.get(opts, :token_counter, PhoenixAI.Store.Memory.TokenCounter.Default)
       }
 
-      with {:ok, messages} <- adapter.get_messages(conversation_id, adapter_opts) do
-        before_count = length(messages)
-        messages = maybe_inject_ltm(messages, adapter, adapter_opts, opts)
+      case adapter.get_messages(conversation_id, adapter_opts) do
+        {:ok, messages} ->
+          before_count = length(messages)
+          messages = maybe_inject_ltm(messages, adapter, adapter_opts, opts)
 
-        case Pipeline.run(pipeline, messages, context) do
-          {:ok, filtered} ->
-            result = {:ok, Enum.map(filtered, &Message.to_phoenix_ai/1)}
+          case Pipeline.run(pipeline, messages, context) do
+            {:ok, filtered} ->
+              result = {:ok, Enum.map(filtered, &Message.to_phoenix_ai/1)}
 
-            maybe_log_event(
-              :memory_trimmed,
-              %{
-                conversation_id: conversation_id,
-                before_count: before_count,
-                after_count: length(filtered)
-              },
-              opts
-            )
+              maybe_log_event(
+                :memory_trimmed,
+                %{
+                  conversation_id: conversation_id,
+                  before_count: before_count,
+                  after_count: length(filtered)
+                },
+                opts
+              )
 
-            {result, %{}}
+              {result, %{}}
 
-          {:error, _} = error ->
-            {error, %{}}
-        end
-      else
-        {:error, _} = error -> {error, %{}}
+            {:error, _} = error ->
+              {error, %{}}
+          end
+
+        {:error, _} = error ->
+          {error, %{}}
       end
     end)
   end

@@ -32,7 +32,7 @@ defmodule PhoenixAI.Store.EventsIntegrationTest do
       assert {:ok, %{events: events}} =
                Store.list_events([type: :conversation_created], store: @store_name)
 
-      assert length(events) >= 1
+      assert events != []
       event = List.last(events)
       assert event.type == :conversation_created
       assert event.data.title == "Event test"
@@ -47,7 +47,7 @@ defmodule PhoenixAI.Store.EventsIntegrationTest do
       assert {:ok, %{events: events}} =
                Store.list_events([type: :message_sent], store: @store_name)
 
-      assert length(events) >= 1
+      assert events != []
       event = List.last(events)
       assert event.type == :message_sent
       assert event.data.role == :user
@@ -140,7 +140,7 @@ defmodule PhoenixAI.Store.EventsIntegrationTest do
       assert {:ok, %{events: events}} =
                Store.list_events([type: :message_sent], store: :redact_test_store)
 
-      assert length(events) >= 1
+      assert events != []
       event = List.last(events)
       assert event.data.content == "[REDACTED]"
     end

@@ -42,9 +42,7 @@ defmodule PhoenixAI.Store.LongTermMemory.Injector do
 
   defp maybe_add_facts(acc, facts) do
     lines =
-      facts
-      |> Enum.map(fn %Fact{key: key, value: value} -> "- #{key}: #{value}" end)
-      |> Enum.join("\n")
+      Enum.map_join(facts, "\n", fn %Fact{key: key, value: value} -> "- #{key}: #{value}" end)
 
     msg = %Message{
       role: :system,

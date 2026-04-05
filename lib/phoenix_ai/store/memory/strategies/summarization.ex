@@ -76,9 +76,7 @@ defmodule PhoenixAI.Store.Memory.Strategies.Summarization do
     end
 
     conversation_text =
-      messages
-      |> Enum.map(fn msg -> "#{msg.role}: #{msg.content}" end)
-      |> Enum.join("\n")
+      Enum.map_join(messages, "\n", fn msg -> "#{msg.role}: #{msg.content}" end)
 
     prompt = [
       %PhoenixAI.Message{

@@ -206,7 +206,7 @@ defmodule PhoenixAI.Store.Memory.PipelineTest do
       {:ok, result} = Pipeline.run(pipeline, messages, %{})
 
       # Should have summary message + some recent messages
-      assert length(result) > 0
+      assert result != []
       # The summary is pinned, so it gets extracted and re-injected at the beginning
       summary = Enum.find(result, &(&1.pinned == true))
       assert summary != nil

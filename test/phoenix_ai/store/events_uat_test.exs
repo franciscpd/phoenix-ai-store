@@ -84,7 +84,7 @@ defmodule PhoenixAI.Store.Events.UATTest do
       {:ok, %{events: events}} =
         Store.list_events([conversation_id: conv_id, type: :policy_violation], store: store)
 
-      assert length(events) >= 1
+      assert events != []
       event = hd(events)
       assert event.data[:reason] =~ "Token budget"
     end
@@ -117,7 +117,7 @@ defmodule PhoenixAI.Store.Events.UATTest do
       # Verify events were logged automatically.
       {:ok, %{events: events}} = Store.list_events([conversation_id: conv_id], store: store)
       # At minimum: conversation_created from setup
-      assert length(events) >= 1
+      assert events != []
     end
   end
 

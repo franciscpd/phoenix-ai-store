@@ -174,7 +174,7 @@ defmodule PhoenixAI.Store.AdapterContractTest do
 
           midpoint = DateTime.add(DateTime.utc_now(), -1800, :second)
           {:ok, after_mid} = @adapter.list_conversations([inserted_after: midpoint], opts)
-          assert length(after_mid) >= 1
+          assert after_mid != []
 
           assert Enum.all?(
                    after_mid,

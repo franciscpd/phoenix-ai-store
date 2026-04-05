@@ -54,7 +54,7 @@ if Code.ensure_loaded?(Ecto) do
     @doc "Loads a conversation by ID from the database, preloading messages ordered by `inserted_at`."
     @impl true
     def load_conversation(id, opts) do
-      if not valid_uuid?(id), do: {:error, :not_found}, else: do_load_conversation(id, opts)
+      if valid_uuid?(id), do: do_load_conversation(id, opts), else: {:error, :not_found}
     end
 
     defp do_load_conversation(id, opts) do
@@ -90,7 +90,7 @@ if Code.ensure_loaded?(Ecto) do
     @doc "Deletes a conversation row from the database. Returns `{:error, :not_found}` if absent."
     @impl true
     def delete_conversation(id, opts) do
-      if not valid_uuid?(id), do: {:error, :not_found}, else: do_delete_conversation(id, opts)
+      if valid_uuid?(id), do: do_delete_conversation(id, opts), else: {:error, :not_found}
     end
 
     defp do_delete_conversation(id, opts) do
@@ -117,7 +117,7 @@ if Code.ensure_loaded?(Ecto) do
     @doc "Checks whether a conversation exists in the database using `Repo.exists?/1`."
     @impl true
     def conversation_exists?(id, opts) do
-      if not valid_uuid?(id), do: {:ok, false}, else: do_conversation_exists?(id, opts)
+      if valid_uuid?(id), do: do_conversation_exists?(id, opts), else: {:ok, false}
     end
 
     defp do_conversation_exists?(id, opts) do
@@ -128,10 +128,10 @@ if Code.ensure_loaded?(Ecto) do
     @doc "Inserts a message row into the database. Returns `{:error, :not_found}` if the conversation does not exist."
     @impl true
     def add_message(conversation_id, %Message{} = message, opts) do
-      if not valid_uuid?(conversation_id) do
-        {:error, :not_found}
-      else
+      if valid_uuid?(conversation_id) do
         do_add_message(conversation_id, message, opts)
+      else
+        {:error, :not_found}
       end
     end
 
@@ -157,9 +157,9 @@ if Code.ensure_loaded?(Ecto) do
     @doc "Queries all messages for a conversation from the database, ordered by `inserted_at` ascending."
     @impl true
     def get_messages(conversation_id, opts) do
-      if not valid_uuid?(conversation_id),
-        do: {:ok, []},
-        else: do_get_messages(conversation_id, opts)
+      if valid_uuid?(conversation_id),
+        do: do_get_messages(conversation_id, opts),
+        else: {:ok, []}
     end
 
     defp do_get_messages(conversation_id, opts) do
@@ -274,9 +274,7 @@ if Code.ensure_loaded?(Ecto) do
     @doc "Sums `token_count` for all messages in a conversation using a database `SUM` aggregate."
     @impl PhoenixAI.Store.Adapter.TokenUsage
     def sum_conversation_tokens(conversation_id, opts) do
-      if not valid_uuid?(conversation_id) do
-        {:ok, 0}
-      else
+      if valid_uuid?(conversation_id) do
         repo = Keyword.fetch!(opts, :repo)
 
         total =
@@ -287,6 +285,8 @@ if Code.ensure_loaded?(Ecto) do
           |> repo.one()
 
         {:ok, total}
+      else
+        {:ok, 0}
       end
     end
 

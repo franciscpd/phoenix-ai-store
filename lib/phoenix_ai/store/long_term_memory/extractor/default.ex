@@ -41,9 +41,7 @@ defmodule PhoenixAI.Store.LongTermMemory.Extractor.Default do
     end
 
     conversation_text =
-      messages
-      |> Enum.map(fn msg -> "#{msg.role}: #{msg.content}" end)
-      |> Enum.join("\n")
+      Enum.map_join(messages, "\n", fn msg -> "#{msg.role}: #{msg.content}" end)
 
     existing_facts_text =
       case Map.get(context, :existing_facts, []) do
@@ -52,9 +50,7 @@ defmodule PhoenixAI.Store.LongTermMemory.Extractor.Default do
 
         facts ->
           known =
-            facts
-            |> Enum.map(fn f -> "- #{f.key}: #{f.value}" end)
-            |> Enum.join("\n")
+            Enum.map_join(facts, "\n", fn f -> "- #{f.key}: #{f.value}" end)
 
           "\nAlready known facts (do not re-extract these unless the value changed):\n#{known}\n"
       end
