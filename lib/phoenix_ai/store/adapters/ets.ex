@@ -18,10 +18,12 @@ defmodule PhoenixAI.Store.Adapters.ETS do
   @behaviour PhoenixAI.Store.Adapter.ProfileStore
   @behaviour PhoenixAI.Store.Adapter.TokenUsage
   @behaviour PhoenixAI.Store.Adapter.CostStore
+  @behaviour PhoenixAI.Store.Adapter.EventStore
 
   alias PhoenixAI.Store.{Conversation, Message}
   alias PhoenixAI.Store.LongTermMemory.{Fact, Profile}
   alias PhoenixAI.Store.CostTracking.CostRecord
+  alias PhoenixAI.Store.EventLog.Event
 
   @impl true
   def save_conversation(%Conversation{} = conversation, opts) do
@@ -416,4 +418,129 @@ defmodule PhoenixAI.Store.Adapters.ETS do
   end
 
   defp apply_cost_filters(records, [_ | rest]), do: apply_cost_filters(records, rest)
+
+  # -- EventStore callbacks --
+
+  @impl PhoenixAI.Store.Adapter.EventStore
+  def log_event(%Event{} = event, opts) do
+    table = Keyword.fetch!(opts, :table)
+    now = DateTime.utc_now()
+
+    event = %{
+      event
+      | id: event.id || Uniq.UUID.uuid7(),
+        inserted_at: event.inserted_at || now
+    }
+
+    :ets.insert(table, {{:event, event.inserted_at, event.id}, event})
+    {:ok, event}
+  end
+
+  @impl PhoenixAI.Store.Adapter.EventStore
+  def list_events(filters, opts) do
+    table = Keyword.fetch!(opts, :table)
+    limit = Keyword.get(filters, :limit)
+    cursor = Keyword.get(filters, :cursor)
+
+    events =
+      :ets.match_object(table, {{:event, :_, :_}, :_})
+      |> Enum.map(fn {_key, event} -> event end)
+      |> filter_events(filters)
+      |> Enum.sort_by(&{&1.inserted_at, &1.id}, fn {ts1, id1}, {ts2, id2} ->
+        case DateTime.compare(ts1, ts2) do
+          :lt -> true
+          :gt -> false
+          :eq -> id1 < id2
+        end
+      end)
+      |> maybe_apply_cursor(cursor)
+      |> maybe_take(limit)
+
+    next_cursor =
+      if limit && length(events) == limit do
+        last = List.last(events)
+        encode_event_cursor(last)
+      else
+        nil
+      end
+
+    {:ok, %{events: events, next_cursor: next_cursor}}
+  end
+
+  @impl PhoenixAI.Store.Adapter.EventStore
+  def count_events(filters, opts) do
+    table = Keyword.fetch!(opts, :table)
+
+    count =
+      :ets.match_object(table, {{:event, :_, :_}, :_})
+      |> Enum.map(fn {_key, event} -> event end)
+      |> filter_events(filters)
+      |> length()
+
+    {:ok, count}
+  end
+
+  # -- Event filtering helpers --
+
+  defp filter_events(events, []), do: events
+
+  defp filter_events(events, [{:conversation_id, conv_id} | rest]) do
+    events
+    |> Enum.filter(&(&1.conversation_id == conv_id))
+    |> filter_events(rest)
+  end
+
+  defp filter_events(events, [{:user_id, user_id} | rest]) do
+    events
+    |> Enum.filter(&(&1.user_id == user_id))
+    |> filter_events(rest)
+  end
+
+  defp filter_events(events, [{:type, type} | rest]) do
+    events
+    |> Enum.filter(&(&1.type == type))
+    |> filter_events(rest)
+  end
+
+  defp filter_events(events, [{:after, dt} | rest]) do
+    events
+    |> Enum.filter(&(DateTime.compare(&1.inserted_at, dt) in [:gt, :eq]))
+    |> filter_events(rest)
+  end
+
+  defp filter_events(events, [{:before, dt} | rest]) do
+    events
+    |> Enum.filter(&(DateTime.compare(&1.inserted_at, dt) in [:lt, :eq]))
+    |> filter_events(rest)
+  end
+
+  defp filter_events(events, [_ | rest]), do: filter_events(events, rest)
+
+  defp maybe_apply_cursor(events, nil), do: events
+
+  defp maybe_apply_cursor(events, cursor) do
+    {cursor_ts, cursor_id} = decode_event_cursor(cursor)
+
+    Enum.drop_while(events, fn event ->
+      case DateTime.compare(event.inserted_at, cursor_ts) do
+        :lt -> true
+        :gt -> false
+        :eq -> event.id <= cursor_id
+      end
+    end)
+  end
+
+  defp maybe_take(events, nil), do: events
+  defp maybe_take(events, limit), do: Enum.take(events, limit)
+
+  defp encode_event_cursor(%Event{} = event) do
+    Base.url_encode64("#{DateTime.to_iso8601(event.inserted_at)}|#{event.id}", padding: false)
+  end
+
+  defp decode_event_cursor(cursor) do
+    {:ok, decoded} = Base.url_decode64(cursor, padding: false)
+    [ts_str, id] = String.split(decoded, "|", parts: 2)
+    {:ok, ts, _} = DateTime.from_iso8601(ts_str)
+    {ts, id}
+  end
 end
