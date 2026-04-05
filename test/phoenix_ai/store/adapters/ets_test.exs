@@ -15,4 +15,5 @@ defmodule PhoenixAI.Store.Adapters.ETSTest do
   use PhoenixAI.Store.FactStoreContractTest, adapter: PhoenixAI.Store.Adapters.ETS
   use PhoenixAI.Store.ProfileStoreContractTest, adapter: PhoenixAI.Store.Adapters.ETS
   use PhoenixAI.Store.TokenUsageContractTest, adapter: PhoenixAI.Store.Adapters.ETS
+  use PhoenixAI.Store.CostStoreContractTest, adapter: PhoenixAI.Store.Adapters.ETS
 end

@@ -17,9 +17,11 @@ defmodule PhoenixAI.Store.Adapters.ETS do
   @behaviour PhoenixAI.Store.Adapter.FactStore
   @behaviour PhoenixAI.Store.Adapter.ProfileStore
   @behaviour PhoenixAI.Store.Adapter.TokenUsage
+  @behaviour PhoenixAI.Store.Adapter.CostStore
 
   alias PhoenixAI.Store.{Conversation, Message}
   alias PhoenixAI.Store.LongTermMemory.{Fact, Profile}
+  alias PhoenixAI.Store.CostTracking.CostRecord
 
   @impl true
   def save_conversation(%Conversation{} = conversation, opts) do
@@ -327,4 +329,87 @@ defmodule PhoenixAI.Store.Adapters.ETS do
 
     {:ok, total}
   end
+
+  # -- CostStore callbacks --
+
+  @impl PhoenixAI.Store.Adapter.CostStore
+  def save_cost_record(%CostRecord{} = record, opts) do
+    table = Keyword.fetch!(opts, :table)
+
+    record = %{
+      record
+      | id: record.id || Uniq.UUID.uuid7(),
+        recorded_at: record.recorded_at || DateTime.utc_now()
+    }
+
+    :ets.insert(table, {{:cost_record, record.conversation_id, record.id}, record})
+    {:ok, record}
+  end
+
+  @impl PhoenixAI.Store.Adapter.CostStore
+  def get_cost_records(conversation_id, opts) do
+    table = Keyword.fetch!(opts, :table)
+
+    records =
+      :ets.match_object(table, {{:cost_record, conversation_id, :_}, :_})
+      |> Enum.map(fn {_key, record} -> record end)
+      |> Enum.sort_by(& &1.recorded_at, {:asc, DateTime})
+
+    {:ok, records}
+  end
+
+  @impl PhoenixAI.Store.Adapter.CostStore
+  def sum_cost(filters, opts) do
+    table = Keyword.fetch!(opts, :table)
+
+    total =
+      :ets.match_object(table, {{:cost_record, :_, :_}, :_})
+      |> Enum.map(fn {_key, record} -> record end)
+      |> apply_cost_filters(filters)
+      |> Enum.reduce(Decimal.new("0"), fn record, acc ->
+        Decimal.add(acc, record.total_cost)
+      end)
+
+    {:ok, total}
+  end
+
+  defp apply_cost_filters(records, []), do: records
+
+  defp apply_cost_filters(records, [{:user_id, user_id} | rest]) do
+    records
+    |> Enum.filter(&(&1.user_id == user_id))
+    |> apply_cost_filters(rest)
+  end
+
+  defp apply_cost_filters(records, [{:conversation_id, conversation_id} | rest]) do
+    records
+    |> Enum.filter(&(&1.conversation_id == conversation_id))
+    |> apply_cost_filters(rest)
+  end
+
+  defp apply_cost_filters(records, [{:provider, provider} | rest]) do
+    records
+    |> Enum.filter(&(&1.provider == provider))
+    |> apply_cost_filters(rest)
+  end
+
+  defp apply_cost_filters(records, [{:model, model} | rest]) do
+    records
+    |> Enum.filter(&(&1.model == model))
+    |> apply_cost_filters(rest)
+  end
+
+  defp apply_cost_filters(records, [{:after, dt} | rest]) do
+    records
+    |> Enum.filter(&(DateTime.compare(&1.recorded_at, dt) in [:gt, :eq]))
+    |> apply_cost_filters(rest)
+  end
+
+  defp apply_cost_filters(records, [{:before, dt} | rest]) do
+    records
+    |> Enum.filter(&(DateTime.compare(&1.recorded_at, dt) in [:lt, :eq]))
+    |> apply_cost_filters(rest)
+  end
+
+  defp apply_cost_filters(records, [_ | rest]), do: apply_cost_filters(records, rest)
 end
