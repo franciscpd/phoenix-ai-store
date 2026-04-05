@@ -25,6 +25,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
   alias PhoenixAI.Store.CostTracking.CostRecord
   alias PhoenixAI.Store.EventLog.Event
 
+  @doc "Inserts or updates a conversation in the ETS table, preserving `inserted_at` on upsert."
   @impl true
   def save_conversation(%Conversation{} = conversation, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -52,6 +53,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     {:ok, conversation}
   end
 
+  @doc "Loads a conversation by ID from ETS and eagerly populates its messages."
   @impl true
   def load_conversation(id, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -66,6 +68,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     end
   end
 
+  @doc "Returns all conversations from ETS matching the given filters, sorted by `inserted_at` descending."
   @impl true
   def list_conversations(filters, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -85,6 +88,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     {:ok, conversations}
   end
 
+  @doc "Deletes a conversation and all its messages and cost records from ETS."
   @impl true
   def delete_conversation(id, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -108,14 +112,19 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     end
   end
 
+  @doc """
+  Counts conversations in ETS matching the given filters.
+
+  Note: O(n) — materializes the full filtered list then counts.
+  Use the Ecto adapter for production workloads requiring efficient counts.
+  """
   @impl true
-  # NOTE: O(n) — materializes the full filtered list then counts.
-  # Acceptable for dev/test adapter. For production, use the Ecto adapter.
   def count_conversations(filters, opts) do
     {:ok, conversations} = list_conversations(filters, opts)
     {:ok, length(conversations)}
   end
 
+  @doc "Checks whether a conversation with the given ID exists in the ETS table."
   @impl true
   def conversation_exists?(id, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -126,6 +135,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     end
   end
 
+  @doc "Appends a message to a conversation in ETS. Returns `{:error, :not_found}` if the conversation does not exist."
   @impl true
   def add_message(conversation_id, %Message{} = message, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -148,6 +158,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     end
   end
 
+  @doc "Returns all messages for a conversation from ETS, sorted by `inserted_at` ascending."
   @impl true
   def get_messages(conversation_id, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -202,6 +213,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
 
   # -- FactStore callbacks --
 
+  @doc "Upserts a fact in ETS keyed on `{user_id, key}`, preserving `inserted_at` on update."
   @impl PhoenixAI.Store.Adapter.FactStore
   def save_fact(%Fact{} = fact, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -230,6 +242,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     {:ok, fact}
   end
 
+  @doc "Returns all facts for a user from ETS, sorted by `inserted_at` ascending."
   @impl PhoenixAI.Store.Adapter.FactStore
   def get_facts(user_id, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -242,6 +255,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     {:ok, facts}
   end
 
+  @doc "Deletes a fact by `{user_id, key}` from ETS. Always returns `:ok`."
   @impl PhoenixAI.Store.Adapter.FactStore
   def delete_fact(user_id, key, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -249,6 +263,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     :ok
   end
 
+  @doc "Counts all facts for a user in ETS via a full match scan."
   @impl PhoenixAI.Store.Adapter.FactStore
   def count_facts(user_id, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -258,6 +273,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
 
   # -- ProfileStore callbacks --
 
+  @doc "Upserts a user profile in ETS keyed on `user_id`, preserving `inserted_at` on update."
   @impl PhoenixAI.Store.Adapter.ProfileStore
   def save_profile(%Profile{} = profile, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -286,6 +302,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     {:ok, profile}
   end
 
+  @doc "Loads a user profile from ETS. Returns `{:error, :not_found}` if absent."
   @impl PhoenixAI.Store.Adapter.ProfileStore
   def load_profile(user_id, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -296,6 +313,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     end
   end
 
+  @doc "Deletes a user profile from ETS. Always returns `:ok`."
   @impl PhoenixAI.Store.Adapter.ProfileStore
   def delete_profile(user_id, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -305,6 +323,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
 
   # -- TokenUsage callbacks --
 
+  @doc "Sums `token_count` across all messages for a conversation stored in ETS."
   @impl PhoenixAI.Store.Adapter.TokenUsage
   def sum_conversation_tokens(conversation_id, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -316,6 +335,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     {:ok, total}
   end
 
+  @doc "Sums `token_count` across all messages in all conversations belonging to a user in ETS."
   @impl PhoenixAI.Store.Adapter.TokenUsage
   def sum_user_tokens(user_id, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -338,6 +358,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
 
   # -- CostStore callbacks --
 
+  @doc "Inserts a cost record into ETS keyed on `{conversation_id, record_id}`."
   @impl PhoenixAI.Store.Adapter.CostStore
   def save_cost_record(%CostRecord{} = record, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -352,6 +373,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     {:ok, record}
   end
 
+  @doc "Returns all cost records for a conversation from ETS, sorted by `recorded_at` ascending."
   @impl PhoenixAI.Store.Adapter.CostStore
   def get_cost_records(conversation_id, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -364,6 +386,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     {:ok, records}
   end
 
+  @doc "Sums `total_cost` across all cost records matching the given filters in ETS."
   @impl PhoenixAI.Store.Adapter.CostStore
   def sum_cost(filters, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -421,6 +444,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
 
   # -- EventStore callbacks --
 
+  @doc "Appends an event to the ETS table keyed on `{inserted_at, id}` for stable ordering."
   @impl PhoenixAI.Store.Adapter.EventStore
   def log_event(%Event{} = event, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -436,6 +460,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     {:ok, event}
   end
 
+  @doc "Returns a paginated, filtered list of events from ETS with an opaque cursor for the next page."
   @impl PhoenixAI.Store.Adapter.EventStore
   def list_events(filters, opts) do
     table = Keyword.fetch!(opts, :table)
@@ -467,6 +492,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     {:ok, %{events: events, next_cursor: next_cursor}}
   end
 
+  @doc "Counts events in ETS matching the given filters."
   @impl PhoenixAI.Store.Adapter.EventStore
   def count_events(filters, opts) do
     table = Keyword.fetch!(opts, :table)
