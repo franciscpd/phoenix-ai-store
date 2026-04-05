@@ -197,7 +197,6 @@ defmodule PhoenixAI.Store.LongTermMemory do
   end
 
   defp do_extract_facts(conversation_id, adapter, adapter_opts, opts) do
-
     with {:ok, conv} <- adapter.load_conversation(conversation_id, adapter_opts),
          {:ok, all_messages} <- adapter.get_messages(conversation_id, adapter_opts) do
       cursor = get_in(conv.metadata || %{}, ["_ltm_cursor"])
@@ -310,7 +309,6 @@ defmodule PhoenixAI.Store.LongTermMemory do
   end
 
   defp do_update_profile_impl(user_id, adapter, adapter_opts, opts) do
-
     existing_profile =
       case adapter.load_profile(user_id, adapter_opts) do
         {:ok, profile} -> profile

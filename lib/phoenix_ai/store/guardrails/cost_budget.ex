@@ -78,8 +78,7 @@ defmodule PhoenixAI.Store.Guardrails.CostBudget do
     if request.conversation_id do
       :ok
     else
-      {:halt,
-       violation("Scope :conversation requires conversation_id to be set on the request.")}
+      {:halt, violation("Scope :conversation requires conversation_id to be set on the request.")}
     end
   end
 

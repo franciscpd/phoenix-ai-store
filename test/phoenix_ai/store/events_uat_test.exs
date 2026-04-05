@@ -21,7 +21,13 @@ defmodule PhoenixAI.Store.Events.UATTest do
         event_log: [enabled: true]
       )
 
-    conv = %Conversation{id: Uniq.UUID.uuid7(), user_id: "uat_user", title: "UAT Event", messages: []}
+    conv = %Conversation{
+      id: Uniq.UUID.uuid7(),
+      user_id: "uat_user",
+      title: "UAT Event",
+      messages: []
+    }
+
     {:ok, _} = Store.save_conversation(conv, store: store)
 
     {:ok, store: store, conv_id: conv.id}
@@ -31,7 +37,9 @@ defmodule PhoenixAI.Store.Events.UATTest do
 
   describe "UAT 1: Automatic recording without extra developer code" do
     test "conversation_created logged on save_conversation", %{store: store, conv_id: conv_id} do
-      {:ok, %{events: events}} = Store.list_events([conversation_id: conv_id, type: :conversation_created], store: store)
+      {:ok, %{events: events}} =
+        Store.list_events([conversation_id: conv_id, type: :conversation_created], store: store)
+
       assert length(events) == 1
       assert hd(events).type == :conversation_created
       # user_id is on the Event struct, not in data
@@ -40,9 +48,14 @@ defmodule PhoenixAI.Store.Events.UATTest do
     end
 
     test "message_sent logged on add_message", %{store: store, conv_id: conv_id} do
-      {:ok, _} = Store.add_message(conv_id, %Message{role: :user, content: "Hello UAT", token_count: 10}, store: store)
+      {:ok, _} =
+        Store.add_message(conv_id, %Message{role: :user, content: "Hello UAT", token_count: 10},
+          store: store
+        )
 
-      {:ok, %{events: events}} = Store.list_events([conversation_id: conv_id, type: :message_sent], store: store)
+      {:ok, %{events: events}} =
+        Store.list_events([conversation_id: conv_id, type: :message_sent], store: store)
+
       assert length(events) == 1
       event = hd(events)
       assert event.data[:role] == :user
@@ -51,7 +64,10 @@ defmodule PhoenixAI.Store.Events.UATTest do
 
     test "policy_violation logged on guardrail halt", %{store: store, conv_id: conv_id} do
       # Add messages so TokenBudget has something to count
-      {:ok, _} = Store.add_message(conv_id, %Message{role: :user, content: "msg", token_count: 500}, store: store)
+      {:ok, _} =
+        Store.add_message(conv_id, %Message{role: :user, content: "msg", token_count: 500},
+          store: store
+        )
 
       request = %Request{
         messages: [%PhoenixAI.Message{role: :user, content: "test"}],
@@ -61,9 +77,13 @@ defmodule PhoenixAI.Store.Events.UATTest do
 
       # TokenBudget with very low max → violation
       {:error, %PolicyViolation{}} =
-        Store.check_guardrails(request, [{TokenBudget, scope: :conversation, max: 1}], store: store)
+        Store.check_guardrails(request, [{TokenBudget, scope: :conversation, max: 1}],
+          store: store
+        )
 
-      {:ok, %{events: events}} = Store.list_events([conversation_id: conv_id, type: :policy_violation], store: store)
+      {:ok, %{events: events}} =
+        Store.list_events([conversation_id: conv_id, type: :policy_violation], store: store)
+
       assert length(events) >= 1
       event = hd(events)
       assert event.data[:reason] =~ "Token budget"
@@ -81,7 +101,9 @@ defmodule PhoenixAI.Store.Events.UATTest do
 
       {:ok, _} = Store.record_cost(conv_id, response, store: store, user_id: "uat_user")
 
-      {:ok, %{events: events}} = Store.list_events([conversation_id: conv_id, type: :cost_recorded], store: store)
+      {:ok, %{events: events}} =
+        Store.list_events([conversation_id: conv_id, type: :cost_recorded], store: store)
+
       assert length(events) == 1
       event = hd(events)
       assert event.data[:provider] == :openai || event.data[:provider] == "openai"
@@ -122,11 +144,12 @@ defmodule PhoenixAI.Store.Events.UATTest do
     test "paginate through events with cursor", %{store: store, conv_id: conv_id} do
       # Add several messages to generate events
       for i <- 1..4 do
-        {:ok, _} = Store.add_message(
-          conv_id,
-          %Message{role: :user, content: "msg #{i}", token_count: i},
-          store: store
-        )
+        {:ok, _} =
+          Store.add_message(
+            conv_id,
+            %Message{role: :user, content: "msg #{i}", token_count: i},
+            store: store
+          )
       end
 
       # Total: 1 conversation_created + 4 message_sent = 5 events
@@ -152,7 +175,8 @@ defmodule PhoenixAI.Store.Events.UATTest do
         Store.list_events([conversation_id: conv_id, limit: 2, cursor: cursor2], store: store)
 
       assert length(page3) == 1
-      assert cursor3 == nil  # last page
+      # last page
+      assert cursor3 == nil
 
       # Verify chronological order across all pages
       all_events = page1 ++ page2 ++ page3
@@ -170,7 +194,9 @@ defmodule PhoenixAI.Store.Events.UATTest do
       redact_fn = fn
         %Event{type: :message_sent, data: data} = event ->
           %{event | data: Map.put(data, :content, "[REDACTED]")}
-        event -> event
+
+        event ->
+          event
       end
 
       {:ok, _} =
@@ -180,23 +206,34 @@ defmodule PhoenixAI.Store.Events.UATTest do
           event_log: [enabled: true, redact_fn: redact_fn]
         )
 
-      conv = %Conversation{id: Uniq.UUID.uuid7(), user_id: "pii_user", title: "PII Test", messages: []}
+      conv = %Conversation{
+        id: Uniq.UUID.uuid7(),
+        user_id: "pii_user",
+        title: "PII Test",
+        messages: []
+      }
+
       {:ok, _} = Store.save_conversation(conv, store: store)
 
       # Send a message with PII
-      {:ok, _} = Store.add_message(
-        conv.id,
-        %Message{role: :user, content: "My SSN is 123-45-6789", token_count: 10},
-        store: store
-      )
+      {:ok, _} =
+        Store.add_message(
+          conv.id,
+          %Message{role: :user, content: "My SSN is 123-45-6789", token_count: 10},
+          store: store
+        )
 
       # Verify the event has redacted content
-      {:ok, %{events: events}} = Store.list_events([conversation_id: conv.id, type: :message_sent], store: store)
+      {:ok, %{events: events}} =
+        Store.list_events([conversation_id: conv.id, type: :message_sent], store: store)
+
       assert length(events) == 1
       assert hd(events).data[:content] == "[REDACTED]"
 
       # Verify conversation_created was NOT redacted (different type)
-      {:ok, %{events: conv_events}} = Store.list_events([conversation_id: conv.id, type: :conversation_created], store: store)
+      {:ok, %{events: conv_events}} =
+        Store.list_events([conversation_id: conv.id, type: :conversation_created], store: store)
+
       assert length(conv_events) == 1
       assert hd(conv_events).data[:title] == "PII Test"
     end

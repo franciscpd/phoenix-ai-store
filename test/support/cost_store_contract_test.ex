@@ -90,9 +90,26 @@ defmodule PhoenixAI.Store.CostStoreContractTest do
           earlier = DateTime.add(now, -60, :second)
           later = DateTime.add(now, 60, :second)
 
-          r1 = build_cost_record(%{conversation_id: saved_conv.id, recorded_at: later, model: "gpt-4-later"})
-          r2 = build_cost_record(%{conversation_id: saved_conv.id, recorded_at: earlier, model: "gpt-4-earlier"})
-          r3 = build_cost_record(%{conversation_id: saved_conv.id, recorded_at: now, model: "gpt-4-now"})
+          r1 =
+            build_cost_record(%{
+              conversation_id: saved_conv.id,
+              recorded_at: later,
+              model: "gpt-4-later"
+            })
+
+          r2 =
+            build_cost_record(%{
+              conversation_id: saved_conv.id,
+              recorded_at: earlier,
+              model: "gpt-4-earlier"
+            })
+
+          r3 =
+            build_cost_record(%{
+              conversation_id: saved_conv.id,
+              recorded_at: now,
+              model: "gpt-4-now"
+            })
 
           {:ok, _} = @cost_adapter.save_cost_record(r1, opts)
           {:ok, _} = @cost_adapter.save_cost_record(r2, opts)
@@ -154,12 +171,7 @@ defmodule PhoenixAI.Store.CostStoreContractTest do
           {:ok, _} = @cost_adapter.save_cost_record(r2, opts)
           {:ok, _} = @cost_adapter.save_cost_record(r3, opts)
 
-          {:ok,
-           conv1: conv1,
-           conv2: conv2,
-           now: now,
-           yesterday: yesterday,
-           tomorrow: tomorrow}
+          {:ok, conv1: conv1, conv2: conv2, now: now, yesterday: yesterday, tomorrow: tomorrow}
         end
 
         test "filters by user_id", %{opts: opts} do

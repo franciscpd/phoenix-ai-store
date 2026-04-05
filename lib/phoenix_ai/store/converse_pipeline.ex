@@ -64,7 +64,8 @@ defmodule PhoenixAI.Store.ConversePipeline do
          {:ok, messages} <- prepare_messages(adapter, conversation_id, adapter_opts, context),
          {:ok, messages} <- check_guardrails(messages, conversation_id, context),
          {:ok, response} <- call_ai(messages, context),
-         {:ok, _asst_msg} <- save_assistant_message(adapter, conversation_id, response, adapter_opts) do
+         {:ok, _asst_msg} <-
+           save_assistant_message(adapter, conversation_id, response, adapter_opts) do
       post_process(conversation_id, response, context)
       {:ok, response}
     end
@@ -99,6 +100,7 @@ defmodule PhoenixAI.Store.ConversePipeline do
   end
 
   defp maybe_apply_memory(messages, %{memory_pipeline: nil}), do: messages
+
   defp maybe_apply_memory(messages, %{memory_pipeline: %MemoryPipeline{} = pipeline} = context) do
     memory_context = %{
       conversation_id: nil,
@@ -113,9 +115,11 @@ defmodule PhoenixAI.Store.ConversePipeline do
       {:error, _} -> messages
     end
   end
+
   defp maybe_apply_memory(messages, _context), do: messages
 
   defp maybe_prepend_system(messages, nil), do: messages
+
   defp maybe_prepend_system(messages, system) do
     [%PhoenixAI.Message{role: :system, content: system} | messages]
   end
@@ -123,6 +127,7 @@ defmodule PhoenixAI.Store.ConversePipeline do
   # Step 4: Check guardrails (skip if nil/empty)
   defp check_guardrails(messages, _conversation_id, %{guardrails: nil}), do: {:ok, messages}
   defp check_guardrails(messages, _conversation_id, %{guardrails: []}), do: {:ok, messages}
+
   defp check_guardrails(messages, conversation_id, context) do
     request = %Request{
       messages: messages,

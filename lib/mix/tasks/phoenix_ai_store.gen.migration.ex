@@ -37,7 +37,13 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
   def run(args) do
     {opts, _, _} =
       OptionParser.parse(args,
-        strict: [prefix: :string, migrations_path: :string, ltm: :boolean, cost: :boolean, events: :boolean]
+        strict: [
+          prefix: :string,
+          migrations_path: :string,
+          ltm: :boolean,
+          cost: :boolean,
+          events: :boolean
+        ]
       )
 
     prefix = Keyword.get(opts, :prefix, @default_prefix)

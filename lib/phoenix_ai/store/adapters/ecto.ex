@@ -212,7 +212,10 @@ if Code.ensure_loaded?(Ecto) do
     @impl PhoenixAI.Store.Adapter.FactStore
     def delete_fact(user_id, key, opts) do
       repo = Keyword.fetch!(opts, :repo)
-      from(f in fact_source(opts), where: f.user_id == ^user_id and f.key == ^key) |> repo.delete_all()
+
+      from(f in fact_source(opts), where: f.user_id == ^user_id and f.key == ^key)
+      |> repo.delete_all()
+
       :ok
     end
 
@@ -220,7 +223,11 @@ if Code.ensure_loaded?(Ecto) do
     @impl PhoenixAI.Store.Adapter.FactStore
     def count_facts(user_id, opts) do
       repo = Keyword.fetch!(opts, :repo)
-      count = from(f in fact_source(opts), where: f.user_id == ^user_id, select: count(f.id)) |> repo.one()
+
+      count =
+        from(f in fact_source(opts), where: f.user_id == ^user_id, select: count(f.id))
+        |> repo.one()
+
       {:ok, count}
     end
 
@@ -376,7 +383,9 @@ if Code.ensure_loaded?(Ecto) do
     defp fact_source(opts), do: {fact_table_name(opts), FactSchema}
     defp profile_source(opts), do: {profile_table_name(opts), ProfileSchema}
     defp fact_table_name(opts), do: Keyword.get(opts, :prefix, "phoenix_ai_store_") <> "facts"
-    defp profile_table_name(opts), do: Keyword.get(opts, :prefix, "phoenix_ai_store_") <> "profiles"
+
+    defp profile_table_name(opts),
+      do: Keyword.get(opts, :prefix, "phoenix_ai_store_") <> "profiles"
 
     defp handle_fact_result({:ok, schema}), do: {:ok, FactSchema.to_store_struct(schema)}
     defp handle_fact_result({:error, changeset}), do: {:error, changeset}

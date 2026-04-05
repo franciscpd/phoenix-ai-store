@@ -164,7 +164,9 @@ defmodule PhoenixAI.Store.EventStoreContractTest do
           refute :old in types
 
           # before filter (inclusive)
-          {:ok, result} = @event_adapter.list_events([conversation_id: conv_id, before: now], opts)
+          {:ok, result} =
+            @event_adapter.list_events([conversation_id: conv_id, before: now], opts)
+
           types = Enum.map(result.events, & &1.type)
           assert :old in types
           assert :current in types
@@ -230,13 +232,16 @@ defmodule PhoenixAI.Store.EventStoreContractTest do
 
           {:ok, _} = @event_adapter.log_event(build_event(%{conversation_id: conv_id}), opts)
           {:ok, _} = @event_adapter.log_event(build_event(%{conversation_id: conv_id}), opts)
-          {:ok, _} = @event_adapter.log_event(build_event(%{conversation_id: Uniq.UUID.uuid7()}), opts)
+
+          {:ok, _} =
+            @event_adapter.log_event(build_event(%{conversation_id: Uniq.UUID.uuid7()}), opts)
 
           assert {:ok, 2} = @event_adapter.count_events([conversation_id: conv_id], opts)
         end
 
         test "returns 0 for no matches", %{opts: opts} do
-          assert {:ok, 0} = @event_adapter.count_events([conversation_id: Uniq.UUID.uuid7()], opts)
+          assert {:ok, 0} =
+                   @event_adapter.count_events([conversation_id: Uniq.UUID.uuid7()], opts)
         end
       end
     end

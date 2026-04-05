@@ -17,13 +17,25 @@ defmodule PhoenixAI.Store.Guardrails.UATTest do
 
     conv = %Conversation{id: Uniq.UUID.uuid7(), user_id: "uat_user", title: "UAT", messages: []}
     {:ok, _} = Store.save_conversation(conv, store: store)
-    {:ok, _} = Store.add_message(conv.id, %Message{role: :user, content: "Hello", token_count: 500}, store: store)
-    {:ok, _} = Store.add_message(conv.id, %Message{role: :assistant, content: "Hi!", token_count: 300}, store: store)
+
+    {:ok, _} =
+      Store.add_message(conv.id, %Message{role: :user, content: "Hello", token_count: 500},
+        store: store
+      )
+
+    {:ok, _} =
+      Store.add_message(conv.id, %Message{role: :assistant, content: "Hi!", token_count: 300},
+        store: store
+      )
 
     # Second conversation for user-scope tests
     conv2 = %Conversation{id: Uniq.UUID.uuid7(), user_id: "uat_user", title: "UAT2", messages: []}
     {:ok, _} = Store.save_conversation(conv2, store: store)
-    {:ok, _} = Store.add_message(conv2.id, %Message{role: :user, content: "More", token_count: 200}, store: store)
+
+    {:ok, _} =
+      Store.add_message(conv2.id, %Message{role: :user, content: "More", token_count: 200},
+        store: store
+      )
 
     {:ok, store: store, conv_id: conv.id, conv2_id: conv2.id}
   end
@@ -39,7 +51,9 @@ defmodule PhoenixAI.Store.Guardrails.UATTest do
       }
 
       assert {:error, %PolicyViolation{reason: reason, metadata: meta}} =
-               Store.check_guardrails(req, [{TokenBudget, scope: :conversation, max: 100}], store: store)
+               Store.check_guardrails(req, [{TokenBudget, scope: :conversation, max: 100}],
+                 store: store
+               )
 
       assert reason =~ "Token budget exceeded"
       assert meta.accumulated == 800
@@ -54,7 +68,9 @@ defmodule PhoenixAI.Store.Guardrails.UATTest do
       }
 
       assert {:ok, %Request{}} =
-               Store.check_guardrails(req, [{TokenBudget, scope: :conversation, max: 10_000}], store: store)
+               Store.check_guardrails(req, [{TokenBudget, scope: :conversation, max: 10_000}],
+                 store: store
+               )
     end
   end
 
@@ -79,7 +95,9 @@ defmodule PhoenixAI.Store.Guardrails.UATTest do
       }
 
       assert {:ok, %Request{}} =
-               Store.check_guardrails(req, [{TokenBudget, scope: :user, max: 50_000}], store: store)
+               Store.check_guardrails(req, [{TokenBudget, scope: :user, max: 50_000}],
+                 store: store
+               )
     end
   end
 
@@ -196,7 +214,9 @@ defmodule PhoenixAI.Store.Guardrails.UATTest do
       }
 
       assert {:ok, %Request{assigns: assigns}} =
-               Store.check_guardrails(req, [{TokenBudget, scope: :conversation, max: 10_000}], store: store)
+               Store.check_guardrails(req, [{TokenBudget, scope: :conversation, max: 10_000}],
+                 store: store
+               )
 
       assert assigns.adapter == PhoenixAI.Store.Adapters.ETS
       assert is_list(assigns.adapter_opts)

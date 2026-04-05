@@ -14,7 +14,8 @@ defmodule PhoenixAI.Store.LongTermMemory.Extractor.DefaultTest do
   describe "extract/3" do
     test "extracts facts using the provided extract_fn" do
       extract_fn = fn _messages, _context, _opts ->
-        {:ok, ~s([{"key": "city", "value": "São Paulo"}, {"key": "language", "value": "Portuguese"}])}
+        {:ok,
+         ~s([{"key": "city", "value": "São Paulo"}, {"key": "language", "value": "Portuguese"}])}
       end
 
       context = %{user_id: "user_1", conversation_id: "conv_1"}
@@ -30,7 +31,7 @@ defmodule PhoenixAI.Store.LongTermMemory.Extractor.DefaultTest do
       extract_fn = fn _messages, _context, _opts -> {:ok, "[]"} end
       context = %{user_id: "user_1"}
 
-      assert {:ok, []} = Default.extract(make_messages(), context, [extract_fn: extract_fn])
+      assert {:ok, []} = Default.extract(make_messages(), context, extract_fn: extract_fn)
     end
 
     test "returns error when AI call fails" do
@@ -38,7 +39,7 @@ defmodule PhoenixAI.Store.LongTermMemory.Extractor.DefaultTest do
       context = %{user_id: "user_1"}
 
       assert {:error, {:extraction_failed, :api_error}} =
-               Default.extract(make_messages(), context, [extract_fn: extract_fn])
+               Default.extract(make_messages(), context, extract_fn: extract_fn)
     end
 
     test "returns error when JSON is malformed" do
@@ -46,7 +47,7 @@ defmodule PhoenixAI.Store.LongTermMemory.Extractor.DefaultTest do
       context = %{user_id: "user_1"}
 
       assert {:error, {:parse_error, _}} =
-               Default.extract(make_messages(), context, [extract_fn: extract_fn])
+               Default.extract(make_messages(), context, extract_fn: extract_fn)
     end
 
     test "returns ok empty when messages list is empty" do

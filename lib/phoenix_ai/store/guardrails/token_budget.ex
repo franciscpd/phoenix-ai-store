@@ -61,7 +61,10 @@ defmodule PhoenixAI.Store.Guardrails.TokenBudget do
   defp extract_adapter(%Request{assigns: assigns}) do
     case {Map.get(assigns, :adapter), Map.get(assigns, :adapter_opts)} do
       {nil, _} ->
-        {:halt, violation("No adapter found in request assigns. Use Store.check_guardrails/3 to inject the adapter.")}
+        {:halt,
+         violation(
+           "No adapter found in request assigns. Use Store.check_guardrails/3 to inject the adapter."
+         )}
 
       {adapter, opts} ->
         {:ok, adapter, opts || []}
@@ -73,7 +76,10 @@ defmodule PhoenixAI.Store.Guardrails.TokenBudget do
          function_exported?(adapter, :sum_user_tokens, 2) do
       :ok
     else
-      {:halt, violation("Adapter #{inspect(adapter)} does not support TokenUsage — sum_conversation_tokens/2 and sum_user_tokens/2 are not exported.")}
+      {:halt,
+       violation(
+         "Adapter #{inspect(adapter)} does not support TokenUsage — sum_conversation_tokens/2 and sum_user_tokens/2 are not exported."
+       )}
     end
   end
 
@@ -96,13 +102,19 @@ defmodule PhoenixAI.Store.Guardrails.TokenBudget do
   defp validate_scope_requirements(request, :time_window, opts) do
     cond do
       not Code.ensure_loaded?(Hammer) ->
-        {:halt, violation("Scope :time_window requires the :hammer dependency. Add {:hammer, \"~> 7.3\"} to your mix.exs.")}
+        {:halt,
+         violation(
+           "Scope :time_window requires the :hammer dependency. Add {:hammer, \"~> 7.3\"} to your mix.exs."
+         )}
 
       not Keyword.has_key?(opts, :window_ms) ->
         {:halt, violation("Scope :time_window requires the :window_ms option.")}
 
       is_nil(request.user_id) and is_nil(request.conversation_id) ->
-        {:halt, violation("Scope :time_window requires user_id or conversation_id to be set on the request.")}
+        {:halt,
+         violation(
+           "Scope :time_window requires user_id or conversation_id to be set on the request."
+         )}
 
       true ->
         {:ok, :valid}

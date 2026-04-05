@@ -40,7 +40,11 @@ defmodule PhoenixAI.Store.ProfileStoreContractTest do
 
       describe "save_profile/2" do
         test "saves a new profile", %{opts: opts} do
-          profile = build_profile(%{user_id: "user_sp_new_#{System.unique_integer([:positive])}", summary: "New user"})
+          profile =
+            build_profile(%{
+              user_id: "user_sp_new_#{System.unique_integer([:positive])}",
+              summary: "New user"
+            })
 
           assert {:ok, saved} = @profile_adapter.save_profile(profile, opts)
           assert saved.user_id == profile.user_id

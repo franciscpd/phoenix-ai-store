@@ -8,6 +8,7 @@ defmodule PhoenixAI.Store.ConversePipelineTest do
 
   setup do
     {:ok, _} = TestProvider.start_state(self())
+
     on_exit(fn ->
       try do
         TestProvider.stop_state(self())

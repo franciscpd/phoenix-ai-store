@@ -95,8 +95,11 @@ defmodule PhoenixAI.Store.FactStoreContractTest do
           user_a = "user_gf_a_#{System.unique_integer([:positive])}"
           user_b = "user_gf_b_#{System.unique_integer([:positive])}"
 
-          {:ok, _} = @fact_adapter.save_fact(build_fact(%{user_id: user_a, key: "k", value: "v"}), opts)
-          {:ok, _} = @fact_adapter.save_fact(build_fact(%{user_id: user_b, key: "k", value: "v"}), opts)
+          {:ok, _} =
+            @fact_adapter.save_fact(build_fact(%{user_id: user_a, key: "k", value: "v"}), opts)
+
+          {:ok, _} =
+            @fact_adapter.save_fact(build_fact(%{user_id: user_b, key: "k", value: "v"}), opts)
 
           {:ok, facts_a} = @fact_adapter.get_facts(user_a, opts)
           assert length(facts_a) == 1
@@ -134,9 +137,14 @@ defmodule PhoenixAI.Store.FactStoreContractTest do
         test "returns correct count", %{opts: opts} do
           user_id = "user_cf_#{System.unique_integer([:positive])}"
 
-          {:ok, _} = @fact_adapter.save_fact(build_fact(%{user_id: user_id, key: "k1", value: "v1"}), opts)
-          {:ok, _} = @fact_adapter.save_fact(build_fact(%{user_id: user_id, key: "k2", value: "v2"}), opts)
-          {:ok, _} = @fact_adapter.save_fact(build_fact(%{user_id: user_id, key: "k3", value: "v3"}), opts)
+          {:ok, _} =
+            @fact_adapter.save_fact(build_fact(%{user_id: user_id, key: "k1", value: "v1"}), opts)
+
+          {:ok, _} =
+            @fact_adapter.save_fact(build_fact(%{user_id: user_id, key: "k2", value: "v2"}), opts)
+
+          {:ok, _} =
+            @fact_adapter.save_fact(build_fact(%{user_id: user_id, key: "k3", value: "v3"}), opts)
 
           assert {:ok, 3} = @fact_adapter.count_facts(user_id, opts)
         end

@@ -46,7 +46,12 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     def from_store_struct(%StoreProfile{} = profile) do
-      %{id: profile.id, user_id: profile.user_id, summary: profile.summary, metadata: profile.metadata || %{}}
+      %{
+        id: profile.id,
+        user_id: profile.user_id,
+        summary: profile.summary,
+        metadata: profile.metadata || %{}
+      }
     end
   end
 end

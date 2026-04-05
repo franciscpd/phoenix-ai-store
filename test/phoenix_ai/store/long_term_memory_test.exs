@@ -26,8 +26,11 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
 
   describe "get_facts/2" do
     test "returns facts for a user", %{store: store} do
-      {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "u1", key: "a", value: "1"}, store: store)
-      {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "u1", key: "b", value: "2"}, store: store)
+      {:ok, _} =
+        LongTermMemory.save_fact(%Fact{user_id: "u1", key: "a", value: "1"}, store: store)
+
+      {:ok, _} =
+        LongTermMemory.save_fact(%Fact{user_id: "u1", key: "b", value: "2"}, store: store)
 
       assert {:ok, facts} = LongTermMemory.get_facts("u1", store: store)
       assert length(facts) == 2
@@ -40,7 +43,9 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
 
   describe "delete_fact/3" do
     test "deletes a fact", %{store: store} do
-      {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "u1", key: "a", value: "1"}, store: store)
+      {:ok, _} =
+        LongTermMemory.save_fact(%Fact{user_id: "u1", key: "a", value: "1"}, store: store)
+
       assert :ok = LongTermMemory.delete_fact("u1", "a", store: store)
       assert {:ok, []} = LongTermMemory.get_facts("u1", store: store)
     end
@@ -73,8 +78,17 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
     setup %{store: store} do
       conv = %PhoenixAI.Store.Conversation{user_id: "user_1", messages: []}
       {:ok, conv} = Store.save_conversation(conv, store: store)
-      {:ok, _} = Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :user, content: "I live in SP"}, store: store)
-      {:ok, _} = Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :assistant, content: "Got it!"}, store: store)
+
+      {:ok, _} =
+        Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :user, content: "I live in SP"},
+          store: store
+        )
+
+      {:ok, _} =
+        Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :assistant, content: "Got it!"},
+          store: store
+        )
+
       {:ok, conv: conv}
     end
 
@@ -108,13 +122,26 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
       end
 
       # First extraction — processes 2 messages
-      {:ok, _} = LongTermMemory.extract_facts(conv.id, store: store, extract_fn: extract_fn, provider: :test)
+      {:ok, _} =
+        LongTermMemory.extract_facts(conv.id,
+          store: store,
+          extract_fn: extract_fn,
+          provider: :test
+        )
 
       # Add another message
-      {:ok, _} = Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :user, content: "New msg"}, store: store)
+      {:ok, _} =
+        Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :user, content: "New msg"},
+          store: store
+        )
 
       # Second extraction — should only process the new message
-      {:ok, _} = LongTermMemory.extract_facts(conv.id, store: store, extract_fn: extract_fn, provider: :test)
+      {:ok, _} =
+        LongTermMemory.extract_facts(conv.id,
+          store: store,
+          extract_fn: extract_fn,
+          provider: :test
+        )
 
       {:ok, facts} = LongTermMemory.get_facts("user_1", store: store)
       # Second call should have received fewer messages
@@ -126,15 +153,26 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
       extract_fn = fn _msgs, _ctx, _opts -> {:ok, "[]"} end
 
       # First extraction processes everything
-      {:ok, _} = LongTermMemory.extract_facts(conv.id, store: store, extract_fn: extract_fn, provider: :test)
+      {:ok, _} =
+        LongTermMemory.extract_facts(conv.id,
+          store: store,
+          extract_fn: extract_fn,
+          provider: :test
+        )
 
       # Second extraction has no new messages
-      assert {:ok, []} = LongTermMemory.extract_facts(conv.id, store: store, extract_fn: extract_fn, provider: :test)
+      assert {:ok, []} =
+               LongTermMemory.extract_facts(conv.id,
+                 store: store,
+                 extract_fn: extract_fn,
+                 provider: :test
+               )
     end
 
     test "respects max_facts_per_user limit", %{store: store, conv: conv} do
       extract_fn = fn _msgs, _ctx, _opts ->
-        {:ok, ~s([{"key": "a", "value": "1"}, {"key": "b", "value": "2"}, {"key": "c", "value": "3"}])}
+        {:ok,
+         ~s([{"key": "a", "value": "1"}, {"key": "b", "value": "2"}, {"key": "c", "value": "3"}])}
       end
 
       {:ok, saved} =
@@ -154,7 +192,8 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
 
     test "upserts do not count toward limit", %{store: store, conv: conv} do
       # Pre-populate a fact
-      {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "user_1", key: "a", value: "old"}, store: store)
+      {:ok, _} =
+        LongTermMemory.save_fact(%Fact{user_id: "user_1", key: "a", value: "old"}, store: store)
 
       extract_fn = fn _msgs, _ctx, _opts ->
         # "a" is an upsert, "b" is new
@@ -203,11 +242,24 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
     setup %{store: store} do
       conv = %PhoenixAI.Store.Conversation{user_id: "user_1", messages: []}
       {:ok, conv} = Store.save_conversation(conv, store: store)
-      {:ok, _} = Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :system, content: "Be helpful.", pinned: true}, store: store)
-      {:ok, _} = Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :user, content: "Hello"}, store: store)
 
-      {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "user_1", key: "lang", value: "pt"}, store: store)
-      {:ok, _} = LongTermMemory.save_profile(%Profile{user_id: "user_1", summary: "A dev."}, store: store)
+      {:ok, _} =
+        Store.add_message(
+          conv.id,
+          %PhoenixAI.Store.Message{role: :system, content: "Be helpful.", pinned: true},
+          store: store
+        )
+
+      {:ok, _} =
+        Store.add_message(conv.id, %PhoenixAI.Store.Message{role: :user, content: "Hello"},
+          store: store
+        )
+
+      {:ok, _} =
+        LongTermMemory.save_fact(%Fact{user_id: "user_1", key: "lang", value: "pt"}, store: store)
+
+      {:ok, _} =
+        LongTermMemory.save_profile(%Profile{user_id: "user_1", summary: "A dev."}, store: store)
 
       {:ok, conv: conv}
     end
@@ -243,8 +295,11 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
 
   describe "update_profile/2" do
     test "creates a new profile from facts", %{store: store} do
-      {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "u1", key: "lang", value: "pt"}, store: store)
-      {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "u1", key: "role", value: "dev"}, store: store)
+      {:ok, _} =
+        LongTermMemory.save_fact(%Fact{user_id: "u1", key: "lang", value: "pt"}, store: store)
+
+      {:ok, _} =
+        LongTermMemory.save_fact(%Fact{user_id: "u1", key: "role", value: "dev"}, store: store)
 
       profile_fn = fn _profile, _facts, _context, _opts ->
         {:ok, %{summary: "Portuguese-speaking developer.", metadata: %{"level" => "mid"}}}
@@ -268,7 +323,8 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
           store: store
         )
 
-      {:ok, _} = LongTermMemory.save_fact(%Fact{user_id: "u1", key: "lang", value: "pt"}, store: store)
+      {:ok, _} =
+        LongTermMemory.save_fact(%Fact{user_id: "u1", key: "lang", value: "pt"}, store: store)
 
       profile_fn = fn existing_profile, _facts, _ctx, _opts ->
         assert existing_profile.summary == "A developer."

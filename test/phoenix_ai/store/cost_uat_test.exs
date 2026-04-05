@@ -127,7 +127,9 @@ defmodule PhoenixAI.Store.Cost.UATTest do
       }
 
       {:ok, _} = Store.record_cost(conv_id, openai_resp, store: store, user_id: "uat_cost_user")
-      {:ok, _} = Store.record_cost(conv_id, anthropic_resp, store: store, user_id: "uat_cost_user")
+
+      {:ok, _} =
+        Store.record_cost(conv_id, anthropic_resp, store: store, user_id: "uat_cost_user")
 
       :ok
     end

@@ -18,8 +18,12 @@ defmodule PhoenixAI.Store.Guardrails.CostBudgetTest do
     @impl true
     def sum_cost(filters, _opts) do
       case Keyword.get(filters, :conversation_id) do
-        "conv_over" -> {:ok, Decimal.new("15.00")}
-        "conv_under" -> {:ok, Decimal.new("3.00")}
+        "conv_over" ->
+          {:ok, Decimal.new("15.00")}
+
+        "conv_under" ->
+          {:ok, Decimal.new("3.00")}
+
         _ ->
           case Keyword.get(filters, :user_id) do
             "user_over" -> {:ok, Decimal.new("100.00")}
