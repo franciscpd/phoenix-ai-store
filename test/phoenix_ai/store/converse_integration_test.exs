@@ -1,5 +1,7 @@
 defmodule PhoenixAI.Store.ConverseIntegrationTest do
-  use ExUnit.Case, async: true
+  # async: false — uses Application.put_env/3 for pricing config which is global state;
+  # concurrent execution would cause pricing lookups in other tests to see wrong values.
+  use ExUnit.Case, async: false
 
   alias PhoenixAI.Providers.TestProvider
   alias PhoenixAI.Store
@@ -7,7 +9,6 @@ defmodule PhoenixAI.Store.ConverseIntegrationTest do
   alias PhoenixAI.Store.EventLog.Event
 
   setup do
-    _ = Registry.start_link(keys: :unique, name: PhoenixAI.TestRegistry)
     {:ok, _} = TestProvider.start_state(self())
 
     on_exit(fn ->

@@ -7,8 +7,6 @@ defmodule PhoenixAI.Store.ConversePipelineTest do
   alias PhoenixAI.Store.Guardrails.TokenBudget
 
   setup do
-    # Start the TestProvider registry if not already started
-    _ = Registry.start_link(keys: :unique, name: PhoenixAI.TestRegistry)
     {:ok, _} = TestProvider.start_state(self())
     on_exit(fn ->
       try do

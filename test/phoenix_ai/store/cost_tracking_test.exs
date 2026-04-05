@@ -1,5 +1,7 @@
 defmodule PhoenixAI.Store.CostTrackingTest do
-  use ExUnit.Case, async: true
+  # async: false — this module calls Application.put_env/3 which is global state;
+  # running async would cause pricing lookups in concurrent tests to see the wrong config.
+  use ExUnit.Case, async: false
 
   alias PhoenixAI.Store.CostTracking
   alias PhoenixAI.Store.CostTracking.CostRecord
