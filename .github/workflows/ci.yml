@@ -53,6 +53,8 @@ jobs:
       - run: mix compile --warnings-as-errors
       - run: mix format --check-formatted
       - run: mix credo
+      - run: mix ecto.create
+      - run: mix ecto.migrate --migrations-path test/support/migrations
       - run: mix test
 
   dialyzer:
@@ -83,4 +85,5 @@ jobs:
           restore-keys: ${{ runner.os }}-plts-
 
       - run: mix deps.get
+      - run: mkdir -p priv/plts
       - run: mix dialyzer
