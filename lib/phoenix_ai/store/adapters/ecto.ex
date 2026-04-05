@@ -383,9 +383,7 @@ if Code.ensure_loaded?(Ecto) do
 
     @impl PhoenixAI.Store.Adapter.CostStore
     def get_cost_records(conversation_id, opts) do
-      if not valid_uuid?(conversation_id) do
-        {:ok, []}
-      else
+      if valid_uuid?(conversation_id) do
         repo = Keyword.fetch!(opts, :repo)
 
         records =
@@ -397,6 +395,8 @@ if Code.ensure_loaded?(Ecto) do
           |> Enum.map(&CostRecordSchema.to_store_struct/1)
 
         {:ok, records}
+      else
+        {:ok, []}
       end
     end
 
