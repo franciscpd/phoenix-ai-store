@@ -95,6 +95,10 @@ defmodule PhoenixAI.Store.Adapters.ETS do
         :ets.match_object(table, {{:message, id, :_}, :_})
         |> Enum.each(fn {key, _msg} -> :ets.delete(table, key) end)
 
+        # Delete all cost records for this conversation
+        :ets.match_object(table, {{:cost_record, id, :_}, :_})
+        |> Enum.each(fn {key, _record} -> :ets.delete(table, key) end)
+
         :ok
 
       [] ->

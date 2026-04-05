@@ -9,7 +9,7 @@ defmodule PhoenixAI.Store.Guardrails.CostBudget do
   ## Options
 
     * `:max` (required) — maximum allowed cost as a `Decimal` or string
-    * `:scope` — `:conversation` (default), `:user`, or `:time_window`
+    * `:scope` — `:conversation` (default) or `:user`
 
   ## Assigns
 

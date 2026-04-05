@@ -30,9 +30,9 @@ defmodule PhoenixAI.Store.CostTracking.CostRecord do
     :recorded_at,
     input_tokens: 0,
     output_tokens: 0,
-    input_cost: Decimal.new(0),
-    output_cost: Decimal.new(0),
-    total_cost: Decimal.new(0),
+    input_cost: Decimal.new("0"),
+    output_cost: Decimal.new("0"),
+    total_cost: Decimal.new("0"),
     metadata: %{}
   ]
 end

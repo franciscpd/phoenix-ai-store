@@ -375,8 +375,12 @@ defmodule PhoenixAI.Store do
 
   ## Filters
 
-    * `:conversation_id` — filter by conversation
     * `:user_id` — filter by user
+    * `:conversation_id` — filter by conversation
+    * `:provider` — filter by provider atom (e.g. `:openai`)
+    * `:model` — filter by model string (e.g. `"gpt-4o"`)
+    * `:after` — include only records with `recorded_at >= dt`
+    * `:before` — include only records with `recorded_at <= dt`
   """
   @spec sum_cost(keyword(), keyword()) ::
           {:ok, Decimal.t()} | {:error, term()}
