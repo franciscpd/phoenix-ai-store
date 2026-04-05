@@ -67,6 +67,37 @@ defmodule PhoenixAI.Store.Config do
         profile_provider: [type: :atom, doc: "Provider override for profile AI calls."],
         profile_model: [type: :string, doc: "Model override for profile AI calls."]
       ]
+    ],
+    guardrails: [
+      type: :keyword_list,
+      default: [],
+      doc: "Guardrails configuration.",
+      keys: [
+        policies: [
+          type: {:list, :any},
+          default: [],
+          doc:
+            "Default policy list [{module, opts}]. Used when no policies passed to check_guardrails/3."
+        ],
+        token_budget: [
+          type: :keyword_list,
+          default: [],
+          doc: "Default TokenBudget options.",
+          keys: [
+            max: [type: :pos_integer, doc: "Default max token budget."],
+            scope: [
+              type: {:in, [:conversation, :user, :time_window]},
+              default: :conversation,
+              doc: "Default scope."
+            ],
+            mode: [
+              type: {:in, [:accumulated, :estimated]},
+              default: :accumulated,
+              doc: "Default counting mode."
+            ]
+          ]
+        ]
+      ]
     ]
   ]
 

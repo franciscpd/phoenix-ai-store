@@ -22,6 +22,8 @@ defmodule PhoenixAI.Store do
   use Supervisor
 
   alias PhoenixAI.Store.{Config, Conversation, Instance, Message}
+  alias PhoenixAI.Guardrails.Pipeline, as: GuardrailsPipeline
+  alias PhoenixAI.Guardrails.{PolicyViolation, Request}
   alias PhoenixAI.Store.Memory.Pipeline
 
   # -- Supervisor --
@@ -260,6 +262,49 @@ defmodule PhoenixAI.Store do
       else
         {:error, _} = error -> {error, %{}}
       end
+    end)
+  end
+
+  # -- Guardrails Facade --
+
+  @doc """
+  Runs guardrail policies against a request, with store adapter injection.
+
+  Resolves the adapter from opts, injects it into `request.assigns`
+  (so stateful policies like `TokenBudget` can query the store), then
+  delegates to `PhoenixAI.Guardrails.Pipeline.run/2`.
+
+  ## Example
+
+      request = %Request{
+        messages: messages,
+        conversation_id: conv_id,
+        user_id: user_id
+      }
+
+      policies = [
+        {PhoenixAI.Store.Guardrails.TokenBudget, [max: 100_000, scope: :conversation]},
+        {PhoenixAI.Guardrails.Policies.JailbreakDetection, [threshold: 0.7]}
+      ]
+
+      case Store.check_guardrails(request, policies, store: :my_store) do
+        {:ok, request} -> AI.chat(request.messages, opts)
+        {:error, violation} -> handle_violation(violation)
+      end
+  """
+  @spec check_guardrails(Request.t(), [GuardrailsPipeline.policy_entry()], keyword()) ::
+          {:ok, Request.t()} | {:error, PolicyViolation.t()}
+  def check_guardrails(%Request{} = request, policies, opts \\ []) do
+    :telemetry.span([:phoenix_ai_store, :guardrails, :check], %{}, fn ->
+      {adapter, adapter_opts, _config} = resolve_adapter(opts)
+
+      request = %{
+        request
+        | assigns: Map.merge(request.assigns, %{adapter: adapter, adapter_opts: adapter_opts})
+      }
+
+      result = GuardrailsPipeline.run(policies, request)
+      {result, %{}}
     end)
   end
 
