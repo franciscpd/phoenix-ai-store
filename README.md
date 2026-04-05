@@ -62,4 +62,4 @@ children = [
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](https://github.com/franciscpd/phoenix-ai-store/blob/main/LICENSE) for details.
