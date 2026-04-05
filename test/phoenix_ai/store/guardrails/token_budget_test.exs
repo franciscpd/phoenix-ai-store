@@ -30,7 +30,7 @@ defmodule PhoenixAI.Store.Guardrails.TokenBudgetTest do
 
   defp build_request(overrides \\ %{}) do
     defaults = %{
-      messages: [%PhoenixAI.Message{role: "user", content: "Hello world"}],
+      messages: [%PhoenixAI.Message{role: :user, content: "Hello world"}],
       assigns: %{adapter: StubAdapter, adapter_opts: []},
       conversation_id: "conv_under",
       user_id: "user_under"

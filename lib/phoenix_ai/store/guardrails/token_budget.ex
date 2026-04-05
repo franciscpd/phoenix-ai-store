@@ -40,26 +40,16 @@ defmodule PhoenixAI.Store.Guardrails.TokenBudget do
          :ok <- validate_token_usage(adapter),
          scope <- Keyword.get(opts, :scope, :conversation),
          {:ok, _} <- validate_scope_requirements(request, scope, opts),
-         {:ok, accumulated} <- fetch_accumulated(adapter, adapter_opts, request, scope, opts),
-         estimated <- estimate_request_tokens(request, opts),
-         total <- accumulated + estimated,
-         max <- Keyword.fetch!(opts, :max),
-         true <- total <= max do
-      {:ok, request}
-    else
-      false ->
-        max = Keyword.fetch!(opts, :max)
-        scope = Keyword.get(opts, :scope, :conversation)
+         {:ok, accumulated} <- fetch_accumulated(adapter, adapter_opts, request, scope, opts) do
+      estimated = estimate_request_tokens(request, opts)
+      total = accumulated + estimated
+      max = Keyword.fetch!(opts, :max)
 
-        {:ok, adapter, adapter_opts} = extract_adapter(request)
-        {:ok, accumulated} = fetch_accumulated(adapter, adapter_opts, request, scope, opts)
-        estimated = estimate_request_tokens(request, opts)
-        total = accumulated + estimated
-
+      if total <= max do
+        {:ok, request}
+      else
         {:halt, budget_violation(accumulated, estimated, total, max, scope)}
-
-      {:halt, %PolicyViolation{} = violation} ->
-        {:halt, violation}
+      end
     end
   end
 
@@ -127,7 +117,14 @@ defmodule PhoenixAI.Store.Guardrails.TokenBudget do
     max = Keyword.fetch!(opts, :max)
     key = "#{key_prefix}:#{request.user_id || request.conversation_id}"
 
-    case apply(Hammer, :check_rate_inc, [key, window_ms, max, 0]) do
+    counter = Keyword.get(opts, :token_counter, @default_token_counter)
+
+    increment =
+      request.messages
+      |> Enum.map(fn msg -> counter.count_tokens(msg.content, []) end)
+      |> Enum.sum()
+
+    case apply(Hammer, :check_rate_inc, [key, window_ms, max, increment]) do
       {:allow, count} -> {:ok, count}
       {:deny, _limit} -> {:ok, max}
     end
