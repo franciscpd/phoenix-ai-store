@@ -70,4 +70,19 @@ defmodule PhoenixAI.Store.Adapter do
                 {:ok, Profile.t()} | {:error, :not_found | term()}
     @callback delete_profile(user_id :: String.t(), keyword()) :: :ok | {:error, term()}
   end
+
+  defmodule TokenUsage do
+    @moduledoc """
+    Sub-behaviour for adapters that support token usage aggregation.
+
+    Used by the TokenBudget guardrail policy to efficiently query
+    accumulated token counts without loading full message lists.
+    """
+
+    @callback sum_conversation_tokens(conversation_id :: String.t(), keyword()) ::
+                {:ok, non_neg_integer()} | {:error, term()}
+
+    @callback sum_user_tokens(user_id :: String.t(), keyword()) ::
+                {:ok, non_neg_integer()} | {:error, term()}
+  end
 end
