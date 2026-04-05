@@ -114,6 +114,9 @@ defmodule PhoenixAI.Store.ConverseIntegrationTest do
           store: store
         )
 
+      # Allow async post-processing task to complete
+      Process.sleep(100)
+
       {:ok, %{events: events}} = Store.list_events([], store: store)
 
       event_types = Enum.map(events, & &1.type)
