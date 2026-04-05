@@ -22,6 +22,7 @@ defmodule PhoenixAI.Store do
   use Supervisor
 
   alias PhoenixAI.Store.{Config, Conversation, Instance, Message}
+  alias PhoenixAI.Store.ConversePipeline
   alias PhoenixAI.Guardrails.Pipeline, as: GuardrailsPipeline
   alias PhoenixAI.Guardrails.{PolicyViolation, Request}
   alias PhoenixAI.Store.Memory.Pipeline
@@ -84,11 +85,15 @@ defmodule PhoenixAI.Store do
         result = adapter.save_conversation(conv, adapter_opts)
 
         with {:ok, saved} <- result do
-          maybe_log_event(:conversation_created, %{
-            conversation_id: saved.id,
-            user_id: saved.user_id,
-            title: saved.title
-          }, opts)
+          maybe_log_event(
+            :conversation_created,
+            %{
+              conversation_id: saved.id,
+              user_id: saved.user_id,
+              title: saved.title
+            },
+            opts
+          )
         end
 
         {result, %{}}
@@ -218,12 +223,16 @@ defmodule PhoenixAI.Store do
       result = adapter.add_message(conversation_id, msg, adapter_opts)
 
       with {:ok, saved_msg} <- result do
-        maybe_log_event(:message_sent, %{
-          conversation_id: conversation_id,
-          role: saved_msg.role,
-          content: saved_msg.content,
-          token_count: saved_msg.token_count
-        }, opts)
+        maybe_log_event(
+          :message_sent,
+          %{
+            conversation_id: conversation_id,
+            role: saved_msg.role,
+            content: saved_msg.content,
+            token_count: saved_msg.token_count
+          },
+          opts
+        )
       end
 
       {result, %{}}
@@ -281,11 +290,15 @@ defmodule PhoenixAI.Store do
           {:ok, filtered} ->
             result = {:ok, Enum.map(filtered, &Message.to_phoenix_ai/1)}
 
-            maybe_log_event(:memory_trimmed, %{
-              conversation_id: conversation_id,
-              before_count: before_count,
-              after_count: length(filtered)
-            }, opts)
+            maybe_log_event(
+              :memory_trimmed,
+              %{
+                conversation_id: conversation_id,
+                before_count: before_count,
+                after_count: length(filtered)
+              },
+              opts
+            )
 
             {result, %{}}
 
@@ -339,12 +352,16 @@ defmodule PhoenixAI.Store do
       result = GuardrailsPipeline.run(policies, request)
 
       with {:error, %PhoenixAI.Guardrails.PolicyViolation{} = v} <- result do
-        maybe_log_event(:policy_violation, %{
-          conversation_id: request.conversation_id,
-          user_id: request.user_id,
-          policy: inspect(v.policy),
-          reason: v.reason
-        }, opts)
+        maybe_log_event(
+          :policy_violation,
+          %{
+            conversation_id: request.conversation_id,
+            user_id: request.user_id,
+            policy: inspect(v.policy),
+            reason: v.reason
+          },
+          opts
+        )
       end
 
       {result, %{}}
@@ -385,13 +402,17 @@ defmodule PhoenixAI.Store do
       result = CostTracking.record(conversation_id, response, cost_opts)
 
       with {:ok, record} <- result do
-        maybe_log_event(:cost_recorded, %{
-          conversation_id: conversation_id,
-          user_id: record.user_id,
-          provider: record.provider,
-          model: record.model,
-          total_cost: Decimal.to_string(record.total_cost)
-        }, opts)
+        maybe_log_event(
+          :cost_recorded,
+          %{
+            conversation_id: conversation_id,
+            user_id: record.user_id,
+            provider: record.provider,
+            model: record.model,
+            total_cost: Decimal.to_string(record.total_cost)
+          },
+          opts
+        )
       end
 
       {result, %{}}
@@ -522,6 +543,98 @@ defmodule PhoenixAI.Store do
     end)
   end
 
+  # -- Converse Facade --
+
+  @doc """
+  Sends a user message to an AI provider within a persisted conversation.
+
+  Resolves the adapter, merges per-call options over config-level `:converse`
+  defaults, and delegates to `ConversePipeline.run/3` which handles:
+
+    1. Saving the user message
+    2. Loading conversation history
+    3. Applying memory pipeline (if configured)
+    4. Running guardrail checks (if configured)
+    5. Calling the AI provider
+    6. Saving the assistant response
+    7. Recording cost (if cost tracking enabled)
+    8. Extracting LTM facts (if enabled)
+
+  ## Options
+
+    * `:store` — store instance name (default: `:phoenix_ai_store_default`)
+    * `:provider` — AI provider atom (e.g. `:openai`, `:test`)
+    * `:model` — model string (e.g. `"gpt-4o"`)
+    * `:api_key` — API key for the provider
+    * `:system` — system prompt
+    * `:tools` — tool definitions for function calling
+    * `:memory_pipeline` — `%Pipeline{}` for memory management
+    * `:guardrails` — list of guardrail policy entries
+    * `:user_id` — user identifier
+    * `:extract_facts` — whether to auto-extract LTM facts (default from config)
+  """
+  @spec converse(String.t(), String.t(), keyword()) ::
+          {:ok, PhoenixAI.Response.t()} | {:error, term()}
+  def converse(conversation_id, message, opts \\ []) do
+    :telemetry.span([:phoenix_ai_store, :converse], %{}, fn ->
+      {adapter, adapter_opts, config} = resolve_adapter(opts)
+      converse_defaults = Keyword.get(config, :converse, [])
+
+      context = %{
+        adapter: adapter,
+        adapter_opts: adapter_opts,
+        config: config,
+        provider: Keyword.get(opts, :provider, converse_defaults[:provider]),
+        model: Keyword.get(opts, :model, converse_defaults[:model]),
+        api_key: Keyword.get(opts, :api_key, converse_defaults[:api_key]),
+        system: Keyword.get(opts, :system, converse_defaults[:system]),
+        tools: Keyword.get(opts, :tools),
+        memory_pipeline: Keyword.get(opts, :memory_pipeline),
+        guardrails: Keyword.get(opts, :guardrails),
+        user_id: Keyword.get(opts, :user_id),
+        extract_facts:
+          Keyword.get(opts, :extract_facts, converse_defaults[:extract_facts] || false),
+        store: Keyword.get(opts, :store, :phoenix_ai_store_default)
+      }
+
+      result = ConversePipeline.run(conversation_id, message, context)
+      {result, %{}}
+    end)
+  end
+
+  @doc """
+  Logs a custom event through the EventLog using a simplified map API.
+
+  Builds an `%Event{}` from the given map and delegates to `log_event/2`.
+
+  ## Required keys
+
+    * `:type` — event type atom
+
+  ## Optional keys
+
+    * `:data` — event data map (default: `%{}`)
+    * `:conversation_id` — associated conversation ID
+    * `:user_id` — associated user ID
+    * `:store` — store instance name (default: `:phoenix_ai_store_default`)
+
+  ## Example
+
+      Store.track(%{type: :user_feedback, data: %{rating: 5}, user_id: "u1"})
+  """
+  @spec track(map()) :: {:ok, Event.t()} | {:error, term()}
+  def track(params) when is_map(params) do
+    event = %Event{
+      type: Map.fetch!(params, :type),
+      data: Map.get(params, :data, %{}),
+      conversation_id: Map.get(params, :conversation_id),
+      user_id: Map.get(params, :user_id)
+    }
+
+    store = Map.get(params, :store, :phoenix_ai_store_default)
+    log_event(event, store: store)
+  end
+
   # -- Long-Term Memory Facade --
 
   alias PhoenixAI.Store.LongTermMemory
@@ -540,8 +653,10 @@ defmodule PhoenixAI.Store do
   def delete_fact(user_id, key, opts \\ []), do: LongTermMemory.delete_fact(user_id, key, opts)
 
   @doc "Extracts new facts from a conversation's unprocessed messages and persists them."
-  @spec extract_facts(String.t(), keyword()) :: {:ok, [Fact.t()]} | {:ok, :async} | {:error, term()}
-  def extract_facts(conversation_id, opts \\ []), do: LongTermMemory.extract_facts(conversation_id, opts)
+  @spec extract_facts(String.t(), keyword()) ::
+          {:ok, [Fact.t()]} | {:ok, :async} | {:error, term()}
+  def extract_facts(conversation_id, opts \\ []),
+    do: LongTermMemory.extract_facts(conversation_id, opts)
 
   @doc "Persists a user profile."
   @spec save_profile(Profile.t(), keyword()) :: {:ok, Profile.t()} | {:error, term()}

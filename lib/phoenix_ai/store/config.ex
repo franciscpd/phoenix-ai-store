@@ -115,8 +115,23 @@ defmodule PhoenixAI.Store.Config do
         redact_fn: [
           type: {:or, [{:fun, 1}, nil]},
           default: nil,
-          doc:
-            "Function (Event.t()) -> Event.t() to redact sensitive data before persistence."
+          doc: "Function (Event.t()) -> Event.t() to redact sensitive data before persistence."
+        ]
+      ]
+    ],
+    converse: [
+      type: :keyword_list,
+      default: [],
+      doc: "Default options for converse/3.",
+      keys: [
+        provider: [type: :atom, doc: "Default AI provider."],
+        model: [type: :string, doc: "Default model."],
+        api_key: [type: :string, doc: "Default API key."],
+        system: [type: :string, doc: "Default system prompt."],
+        extract_facts: [
+          type: :boolean,
+          default: false,
+          doc: "Auto-extract LTM facts after each converse call."
         ]
       ]
     ]
