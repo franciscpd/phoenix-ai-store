@@ -20,6 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 6: Cost Tracking** - Pricing tables, per-conversation and per-user cost accumulation, cost budget guardrail, Decimal arithmetic
 - [ ] **Phase 7: Event Log** - Append-only Ecto-backed event log, redaction, cursor-based pagination
 - [ ] **Phase 8: Public API & Telemetry Integration** - `converse/2` facade, TelemetryHandler, HandlerGuardian, full telemetry emission
+- [ ] **Phase 9: Documentation, CI & Publication** - ExDoc documentation, GitHub Actions CI, hex.publish readiness, README, CHANGELOG, LICENSE
 
 ## Phase Details
 
@@ -116,18 +117,31 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Every Store operation emits a `[:phoenix_ai_store, ...]` telemetry event following PhoenixAI naming conventions, observable via `:telemetry.attach/4`
 **Plans**: TBD
 
+### Phase 9: Documentation, CI & Publication
+**Goal**: The library is fully documented with ExDoc, has CI via GitHub Actions, and is ready to publish on Hex.pm — README, CHANGELOG, LICENSE, and `mix hex.publish` all work cleanly
+**Depends on**: Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 7, Phase 8
+**Requirements**: DOC-01
+**Success Criteria** (what must be TRUE):
+  1. Running `mix docs` generates complete ExDoc documentation with no warnings — every public module has `@moduledoc`, every public function has `@doc` and `@spec`
+  2. A "Getting Started" guide walks a new developer from `mix deps.get` to a working `converse/3` call in under 5 minutes, covering both ETS and Ecto adapters
+  3. GitHub Actions CI runs `mix test`, `mix credo`, `mix dialyzer`, and `mix docs` on push — matrix of Elixir 1.15+ and OTP 26+
+  4. `mix hex.publish --dry-run` succeeds with no errors — package metadata, description, licenses, and links are all valid
+  5. README.md on Hex shows a clear value proposition, installation instructions, and quick usage example
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Storage Foundation | 0/TBD | Not started | - |
-| 2. Storage Queries & Metadata | 0/TBD | Not started | - |
-| 3. Memory Strategies | 0/TBD | Not started | - |
-| 4. Long-Term Memory | 0/TBD | Not started | - |
-| 5. Guardrails | 0/TBD | Not started | - |
-| 6. Cost Tracking | 0/TBD | Not started | - |
-| 7. Event Log | 0/TBD | Not started | - |
-| 8. Public API & Telemetry Integration | 0/TBD | Not started | - |
+| 1. Storage Foundation | Done | Complete | 2026-03-29 |
+| 2. Storage Queries & Metadata | Done | Complete | 2026-03-30 |
+| 3. Memory Strategies | Done | Complete | 2026-03-31 |
+| 4. Long-Term Memory | Done | Complete | 2026-04-01 |
+| 5. Guardrails | Done | Complete | 2026-04-03 |
+| 6. Cost Tracking | Done | Complete | 2026-04-04 |
+| 7. Event Log | Done | Complete | 2026-04-05 |
+| 8. Public API & Telemetry Integration | Done | Complete | 2026-04-05 |
+| 9. Documentation, CI & Publication | 0/TBD | Not started | - |
