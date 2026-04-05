@@ -199,4 +199,130 @@ defmodule PhoenixAI.Store.Guardrails.TokenBudgetTest do
       end
     end
   end
+
+  # ========================================================
+  # Time-window happy path (Hammer-gated)
+  # ========================================================
+
+  if Code.ensure_loaded?(Hammer) do
+    defmodule StubRateLimiterAllow do
+      @behaviour Hammer
+
+      @impl true
+      def hit(_key, _scale, _limit), do: {:allow, 100}
+
+      @impl true
+      def hit(_key, _scale, _limit, _increment), do: {:allow, 100}
+    end
+
+    defmodule StubRateLimiterDeny do
+      @behaviour Hammer
+
+      @impl true
+      def hit(_key, _scale, _limit), do: {:deny, 0}
+
+      @impl true
+      def hit(_key, _scale, _limit, _increment), do: {:deny, 0}
+    end
+
+    describe "time_window scope — happy path (Hammer loaded)" do
+      test "passes when token count is within the time-window budget" do
+        request = build_request(%{user_id: "user_tw_ok"})
+
+        assert {:ok, ^request} =
+                 TokenBudget.check(request,
+                   max: 1_000_000,
+                   scope: :time_window,
+                   window_ms: 60_000,
+                   rate_limiter: StubRateLimiterAllow
+                 )
+      end
+    end
+
+    describe "time_window scope — over budget (Hammer loaded)" do
+      test "halts with a violation when token count exceeds the time-window budget" do
+        request =
+          build_request(%{
+            user_id: "user_tw_over",
+            messages: [
+              %PhoenixAI.Message{role: :user, content: "This message has many tokens"}
+            ]
+          })
+
+        assert {:halt, %PolicyViolation{} = violation} =
+                 TokenBudget.check(request,
+                   max: 1,
+                   scope: :time_window,
+                   window_ms: 60_000,
+                   rate_limiter: StubRateLimiterDeny
+                 )
+
+        assert violation.policy == TokenBudget
+        assert violation.reason =~ "Token budget exceeded"
+        assert violation.metadata.scope == :time_window
+        assert violation.metadata.max == 1
+      end
+    end
+  end
+
+  # ========================================================
+  # Time-window missing window_ms
+  # ========================================================
+
+  describe "time_window scope — missing window_ms" do
+    test "halts with a clear error when window_ms is not provided" do
+      request = build_request()
+
+      assert {:halt, %PolicyViolation{} = violation} =
+               TokenBudget.check(request, max: 100_000, scope: :time_window)
+
+      assert violation.reason =~ "window_ms"
+    end
+  end
+
+  # ========================================================
+  # Accumulated mode — only stored tokens count
+  # ========================================================
+
+  describe "accumulated mode — over-budget conversation with large request messages" do
+    test "violation counts only stored tokens, not request message tokens" do
+      # conv_over = 90_000 stored tokens, max = 60_000
+      # In :accumulated mode, request message tokens are NOT added to the total.
+      # The check uses only stored accumulated tokens (90_000 > 60_000 => halt).
+      large_messages = [
+        %PhoenixAI.Message{role: :user, content: String.duplicate("word ", 5_000)}
+      ]
+
+      request =
+        build_request(%{
+          conversation_id: "conv_over",
+          messages: large_messages
+        })
+
+      assert {:halt, %PolicyViolation{} = violation} =
+               TokenBudget.check(request, max: 60_000)
+
+      assert violation.metadata.scope == :conversation
+      assert violation.metadata.accumulated == 90_000
+      # estimated must be 0 — accumulated mode does NOT add request tokens
+      assert violation.metadata.estimated == 0
+      assert violation.metadata.total == 90_000
+    end
+  end
+
+  # ========================================================
+  # Conversation scope with nil conversation_id (duplicate guard)
+  # ========================================================
+
+  describe "conversation scope with nil conversation_id" do
+    test "halts with a violation that mentions conversation_id" do
+      request = build_request(%{conversation_id: nil})
+
+      assert {:halt, %PolicyViolation{} = violation} =
+               TokenBudget.check(request, max: 100_000, scope: :conversation)
+
+      assert violation.policy == TokenBudget
+      assert violation.reason =~ "conversation_id"
+    end
+  end
 end

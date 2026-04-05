@@ -16,6 +16,8 @@ defmodule PhoenixAI.Store.Guardrails.TokenBudget do
       (default: `PhoenixAI.Store.Memory.TokenCounter.Default`)
     * `:window_ms` — for `:time_window` scope, the window duration in ms
     * `:key_prefix` — for `:time_window` scope, Hammer key prefix
+    * `:rate_limiter` — for `:time_window` scope, the Hammer-compatible module to use
+      (default: `PhoenixAI.Store.Guardrails.TokenBudget.RateLimiter`)
 
   ## Assigns
 
@@ -118,16 +120,25 @@ defmodule PhoenixAI.Store.Guardrails.TokenBudget do
     key = "#{key_prefix}:#{request.user_id || request.conversation_id}"
 
     counter = Keyword.get(opts, :token_counter, @default_token_counter)
+    rate_limiter = Keyword.get(opts, :rate_limiter, default_rate_limiter())
 
     increment =
       request.messages
       |> Enum.map(fn msg -> counter.count_tokens(msg.content, []) end)
       |> Enum.sum()
 
-    case apply(Hammer, :check_rate_inc, [key, window_ms, max, increment]) do
+    case rate_limiter.hit(key, window_ms, max, increment) do
       {:allow, count} -> {:ok, count}
-      {:deny, _limit} -> {:ok, max}
+      # Return max + 1 so that the budget check (total > max) correctly triggers a halt
+      {:deny, _timeout} -> {:ok, max + 1}
     end
+  end
+
+  if Code.ensure_loaded?(Hammer) do
+    defp default_rate_limiter,
+      do: PhoenixAI.Store.Guardrails.TokenBudget.RateLimiter
+  else
+    defp default_rate_limiter, do: nil
   end
 
   defp estimate_request_tokens(%Request{} = request, opts) do
