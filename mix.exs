@@ -38,6 +38,7 @@ defmodule PhoenixAI.Store.MixProject do
       {:nimble_options, "~> 1.1"},
       {:telemetry, "~> 1.3"},
       {:uniq, "~> 0.6"},
+      {:decimal, "~> 2.0"},
 
       # Optional — Ecto adapter
       {:ecto, "~> 3.13", optional: true},
