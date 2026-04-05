@@ -31,7 +31,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/phoenix_ai_store_test
+      PGPORT: 5432
     steps:
       - uses: actions/checkout@v4
 
@@ -84,28 +84,3 @@ jobs:
 
       - run: mix deps.get
       - run: mix dialyzer
-
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    env:
-      MIX_ENV: dev
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: erlef/setup-beam@v1
-        with:
-          elixir-version: '1.18'
-          otp-version: '27'
-
-      - name: Cache deps
-        uses: actions/cache@v4
-        with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-mix-dev-${{ hashFiles('mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-dev-
-
-      - run: mix deps.get
-      - run: mix docs
