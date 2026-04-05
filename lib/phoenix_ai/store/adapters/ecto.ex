@@ -12,6 +12,7 @@ if Code.ensure_loaded?(Ecto) do
     @behaviour PhoenixAI.Store.Adapter
     @behaviour PhoenixAI.Store.Adapter.FactStore
     @behaviour PhoenixAI.Store.Adapter.ProfileStore
+    @behaviour PhoenixAI.Store.Adapter.TokenUsage
 
     import Ecto.Query
 
@@ -238,6 +239,42 @@ if Code.ensure_loaded?(Ecto) do
       repo = Keyword.fetch!(opts, :repo)
       from(p in profile_source(opts), where: p.user_id == ^user_id) |> repo.delete_all()
       :ok
+    end
+
+    # -- TokenUsage --
+
+    @impl PhoenixAI.Store.Adapter.TokenUsage
+    def sum_conversation_tokens(conversation_id, opts) do
+      if not valid_uuid?(conversation_id) do
+        {:ok, 0}
+      else
+        repo = Keyword.fetch!(opts, :repo)
+
+        total =
+          from(m in msg_source(opts),
+            where: m.conversation_id == ^conversation_id,
+            select: coalesce(sum(m.token_count), 0)
+          )
+          |> repo.one()
+
+        {:ok, total}
+      end
+    end
+
+    @impl PhoenixAI.Store.Adapter.TokenUsage
+    def sum_user_tokens(user_id, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+
+      total =
+        from(m in msg_source(opts),
+          join: c in ^conv_source(opts),
+          on: m.conversation_id == c.id,
+          where: c.user_id == ^user_id,
+          select: coalesce(sum(m.token_count), 0)
+        )
+        |> repo.one()
+
+      {:ok, total}
     end
 
     # -- Private Helpers --
