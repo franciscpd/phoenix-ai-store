@@ -13,6 +13,7 @@ if Code.ensure_loaded?(Ecto) do
     @behaviour PhoenixAI.Store.Adapter.FactStore
     @behaviour PhoenixAI.Store.Adapter.ProfileStore
     @behaviour PhoenixAI.Store.Adapter.TokenUsage
+    @behaviour PhoenixAI.Store.Adapter.CostStore
 
     import Ecto.Query
 
@@ -22,6 +23,8 @@ if Code.ensure_loaded?(Ecto) do
     alias PhoenixAI.Store.LongTermMemory.{Fact, Profile}
     alias PhoenixAI.Store.Schemas.Fact, as: FactSchema
     alias PhoenixAI.Store.Schemas.Profile, as: ProfileSchema
+    alias PhoenixAI.Store.CostTracking.CostRecord
+    alias PhoenixAI.Store.Schemas.CostRecord, as: CostRecordSchema
 
     @impl true
     def save_conversation(%Conversation{} = conversation, opts) do
@@ -360,6 +363,106 @@ if Code.ensure_loaded?(Ecto) do
 
     defp handle_profile_result({:ok, schema}), do: {:ok, ProfileSchema.to_store_struct(schema)}
     defp handle_profile_result({:error, changeset}), do: {:error, changeset}
+
+    # -- CostStore --
+
+    @impl PhoenixAI.Store.Adapter.CostStore
+    def save_cost_record(%CostRecord{} = record, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+
+      attrs =
+        CostRecordSchema.from_store_struct(record)
+        |> Map.update(:id, Uniq.UUID.uuid7(), fn id -> id || Uniq.UUID.uuid7() end)
+
+      %CostRecordSchema{}
+      |> Ecto.put_meta(source: cost_record_table_name(opts))
+      |> CostRecordSchema.changeset(attrs)
+      |> repo.insert()
+      |> handle_cost_record_result()
+    end
+
+    @impl PhoenixAI.Store.Adapter.CostStore
+    def get_cost_records(conversation_id, opts) do
+      if not valid_uuid?(conversation_id) do
+        {:ok, []}
+      else
+        repo = Keyword.fetch!(opts, :repo)
+
+        records =
+          from(cr in cost_record_source(opts),
+            where: cr.conversation_id == ^conversation_id,
+            order_by: [asc: cr.recorded_at]
+          )
+          |> repo.all()
+          |> Enum.map(&CostRecordSchema.to_store_struct/1)
+
+        {:ok, records}
+      end
+    end
+
+    @impl PhoenixAI.Store.Adapter.CostStore
+    def sum_cost(filters, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+
+      total =
+        from(cr in cost_record_source(opts),
+          select: coalesce(sum(cr.total_cost), ^Decimal.new("0"))
+        )
+        |> apply_cost_filters(filters)
+        |> repo.one()
+
+      {:ok, total}
+    end
+
+    defp apply_cost_filters(query, []), do: query
+
+    defp apply_cost_filters(query, [{:user_id, user_id} | rest]) do
+      query
+      |> where([cr], cr.user_id == ^user_id)
+      |> apply_cost_filters(rest)
+    end
+
+    defp apply_cost_filters(query, [{:conversation_id, conversation_id} | rest]) do
+      query
+      |> where([cr], cr.conversation_id == ^conversation_id)
+      |> apply_cost_filters(rest)
+    end
+
+    defp apply_cost_filters(query, [{:provider, provider} | rest]) do
+      query
+      |> where([cr], cr.provider == ^to_string(provider))
+      |> apply_cost_filters(rest)
+    end
+
+    defp apply_cost_filters(query, [{:model, model} | rest]) do
+      query
+      |> where([cr], cr.model == ^model)
+      |> apply_cost_filters(rest)
+    end
+
+    defp apply_cost_filters(query, [{:after, dt} | rest]) do
+      query
+      |> where([cr], cr.recorded_at >= ^dt)
+      |> apply_cost_filters(rest)
+    end
+
+    defp apply_cost_filters(query, [{:before, dt} | rest]) do
+      query
+      |> where([cr], cr.recorded_at <= ^dt)
+      |> apply_cost_filters(rest)
+    end
+
+    defp apply_cost_filters(query, [_ | rest]), do: apply_cost_filters(query, rest)
+
+    defp cost_record_source(opts), do: {cost_record_table_name(opts), CostRecordSchema}
+
+    defp cost_record_table_name(opts),
+      do: Keyword.get(opts, :prefix, "phoenix_ai_store_") <> "cost_records"
+
+    defp handle_cost_record_result({:ok, schema}),
+      do: {:ok, CostRecordSchema.to_store_struct(schema)}
+
+    defp handle_cost_record_result({:error, changeset}), do: {:error, changeset}
 
     defp valid_uuid?(id) when is_binary(id) do
       case Ecto.UUID.cast(id) do

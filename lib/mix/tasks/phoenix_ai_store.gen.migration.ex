@@ -10,11 +10,16 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
 
       $ mix phoenix_ai_store.gen.migration --ltm
 
+  For existing installations that need to add Cost Tracking tables:
+
+      $ mix phoenix_ai_store.gen.migration --cost
+
   ## Options
 
     * `--prefix` - Table name prefix (default: `phoenix_ai_store_`)
     * `--migrations-path` - Output directory (default: `priv/repo/migrations`)
     * `--ltm` - Generate only the Long-Term Memory tables (facts, profiles)
+    * `--cost` - Generate only the Cost Tracking tables (cost_records)
 
   """
 
@@ -27,29 +32,35 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
   def run(args) do
     {opts, _, _} =
       OptionParser.parse(args,
-        strict: [prefix: :string, migrations_path: :string, ltm: :boolean]
+        strict: [prefix: :string, migrations_path: :string, ltm: :boolean, cost: :boolean]
       )
 
     prefix = Keyword.get(opts, :prefix, @default_prefix)
     migrations_path = Keyword.get(opts, :migrations_path, @default_migrations_path)
     ltm_only = Keyword.get(opts, :ltm, false)
+    cost_only = Keyword.get(opts, :cost, false)
 
     File.mkdir_p!(migrations_path)
 
     slug = slug_from_prefix(prefix)
 
-    if ltm_only do
-      generate_ltm_migration(prefix, slug, migrations_path)
-    else
-      existing =
-        Path.wildcard(Path.join(migrations_path, "*_create_#{slug}_tables.exs"))
+    cond do
+      ltm_only ->
+        generate_ltm_migration(prefix, slug, migrations_path)
 
-      if existing != [] do
-        Mix.shell().info("Migration already exists: #{hd(existing)}")
-        :ok
-      else
-        generate_migration(prefix, slug, migrations_path)
-      end
+      cost_only ->
+        generate_cost_migration(prefix, slug, migrations_path)
+
+      true ->
+        existing =
+          Path.wildcard(Path.join(migrations_path, "*_create_#{slug}_tables.exs"))
+
+        if existing != [] do
+          Mix.shell().info("Migration already exists: #{hd(existing)}")
+          :ok
+        else
+          generate_migration(prefix, slug, migrations_path)
+        end
     end
   end
 
@@ -110,6 +121,42 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
 
   defp fallback_template_path do
     Path.join([File.cwd!(), "priv", "templates", "migration.exs.eex"])
+  end
+
+  defp generate_cost_migration(prefix, slug, migrations_path) do
+    existing =
+      Path.wildcard(Path.join(migrations_path, "*_add_#{slug}_cost_tables.exs"))
+
+    if existing != [] do
+      Mix.shell().info("Cost migration already exists: #{hd(existing)}")
+      :ok
+    else
+      template_path = find_cost_template()
+      timestamp = generate_timestamp()
+      migration_module = module_from_prefix(prefix)
+      repo_module = detect_repo_module()
+
+      assigns = [prefix: prefix, migration_module: migration_module, repo_module: repo_module]
+      content = EEx.eval_file(template_path, assigns: assigns)
+
+      filename = "#{timestamp}_add_#{slug}_cost_tables.exs"
+      filepath = Path.join(migrations_path, filename)
+
+      Mix.Generator.create_file(filepath, content)
+    end
+  end
+
+  defp find_cost_template do
+    case Application.app_dir(:phoenix_ai_store, "priv/templates/cost_migration.exs.eex") do
+      path when is_binary(path) ->
+        if File.exists?(path), do: path, else: fallback_cost_template_path()
+    end
+  rescue
+    _ -> fallback_cost_template_path()
+  end
+
+  defp fallback_cost_template_path do
+    Path.join([File.cwd!(), "priv", "templates", "cost_migration.exs.eex"])
   end
 
   defp find_ltm_template do
