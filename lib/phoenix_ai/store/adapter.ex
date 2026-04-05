@@ -71,6 +71,23 @@ defmodule PhoenixAI.Store.Adapter do
     @callback delete_profile(user_id :: String.t(), keyword()) :: :ok | {:error, term()}
   end
 
+  defmodule CostStore do
+    @moduledoc """
+    Sub-behaviour for adapters that support cost record persistence.
+    """
+
+    alias PhoenixAI.Store.CostTracking.CostRecord
+
+    @callback save_cost_record(CostRecord.t(), keyword()) ::
+                {:ok, CostRecord.t()} | {:error, term()}
+
+    @callback get_cost_records(conversation_id :: String.t(), keyword()) ::
+                {:ok, [CostRecord.t()]} | {:error, term()}
+
+    @callback sum_cost(filters :: keyword(), keyword()) ::
+                {:ok, Decimal.t()} | {:error, term()}
+  end
+
   defmodule TokenUsage do
     @moduledoc """
     Sub-behaviour for adapters that support token usage aggregation.
