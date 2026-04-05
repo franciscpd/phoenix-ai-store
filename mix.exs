@@ -74,7 +74,62 @@ defmodule PhoenixAI.Store.MixProject do
   defp docs do
     [
       main: "PhoenixAI.Store",
-      extras: ["README.md"]
+      source_ref: "v#{@version}",
+      source_url: @source_url,
+      extras: [
+        "README.md",
+        "guides/getting-started.md",
+        "guides/adapters.md",
+        "guides/memory-and-guardrails.md",
+        "guides/telemetry-and-events.md",
+        "CHANGELOG.md"
+      ],
+      groups_for_extras: [
+        Guides: ~r/guides\/.*/
+      ],
+      groups_for_modules: [
+        Core: [
+          PhoenixAI.Store,
+          PhoenixAI.Store.Conversation,
+          PhoenixAI.Store.Message
+        ],
+        Adapters: [
+          PhoenixAI.Store.Adapter,
+          PhoenixAI.Store.Adapters.ETS,
+          PhoenixAI.Store.Adapters.Ecto
+        ],
+        Memory: [
+          PhoenixAI.Store.Memory.Pipeline,
+          PhoenixAI.Store.Memory.SlidingWindow,
+          PhoenixAI.Store.Memory.TokenTruncation,
+          PhoenixAI.Store.Memory.PinnedMessages
+        ],
+        Guardrails: [
+          PhoenixAI.Store.Guardrails.TokenBudget,
+          PhoenixAI.Store.Guardrails.CostBudget
+        ],
+        "Cost Tracking": [
+          PhoenixAI.Store.CostTracking,
+          PhoenixAI.Store.CostTracking.CostRecord,
+          PhoenixAI.Store.CostTracking.PricingProvider
+        ],
+        "Event Log": [
+          PhoenixAI.Store.EventLog,
+          PhoenixAI.Store.EventLog.Event
+        ],
+        "Long-Term Memory": [
+          PhoenixAI.Store.LongTermMemory,
+          PhoenixAI.Store.LongTermMemory.Fact,
+          PhoenixAI.Store.LongTermMemory.Profile
+        ],
+        Telemetry: [
+          PhoenixAI.Store.TelemetryHandler,
+          PhoenixAI.Store.HandlerGuardian
+        ],
+        Pipeline: [
+          PhoenixAI.Store.ConversePipeline
+        ]
+      ]
     ]
   end
 end
