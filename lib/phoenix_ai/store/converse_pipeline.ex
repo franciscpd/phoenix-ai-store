@@ -27,8 +27,8 @@ defmodule PhoenixAI.Store.ConversePipeline do
 
   alias PhoenixAI.Guardrails.Pipeline, as: GuardrailsPipeline
   alias PhoenixAI.Guardrails.Request
-  alias PhoenixAI.Store.Memory.Pipeline, as: MemoryPipeline
   alias PhoenixAI.Store.{CostTracking, EventLog, LongTermMemory, Message}
+  alias PhoenixAI.Store.Memory.Pipeline, as: MemoryPipeline
 
   require Logger
 
@@ -42,6 +42,20 @@ defmodule PhoenixAI.Store.ConversePipeline do
   @spec run(String.t(), String.t(), map()) ::
           {:ok, PhoenixAI.Response.t()} | {:error, term()}
   def run(conversation_id, message, context) do
+    with :ok <- validate_context(context) do
+      run_pipeline(conversation_id, message, context)
+    end
+  end
+
+  defp validate_context(context) do
+    cond do
+      is_nil(context[:provider]) -> {:error, {:missing_option, :provider}}
+      is_nil(context[:model]) -> {:error, {:missing_option, :model}}
+      true -> :ok
+    end
+  end
+
+  defp run_pipeline(conversation_id, message, context) do
     adapter = context.adapter
     adapter_opts = context.adapter_opts
 
@@ -155,25 +169,27 @@ defmodule PhoenixAI.Store.ConversePipeline do
     adapter.add_message(conversation_id, msg, adapter_opts)
   end
 
-  # Step 7: Post-processing (fire-and-forget, try/rescue wrapped)
+  # Step 7: Post-processing (fire-and-forget, truly async via Task.start)
   defp post_process(conversation_id, response, context) do
-    try do
-      maybe_record_cost(conversation_id, response, context)
-    rescue
-      e -> Logger.warning("Post-process cost recording failed: #{inspect(e)}")
-    end
+    Task.start(fn ->
+      try do
+        maybe_record_cost(conversation_id, response, context)
+      rescue
+        e -> Logger.warning("Post-process cost recording failed: #{inspect(e)}")
+      end
 
-    try do
-      maybe_log_event(conversation_id, response, context)
-    rescue
-      e -> Logger.warning("Post-process event logging failed: #{inspect(e)}")
-    end
+      try do
+        maybe_log_event(conversation_id, response, context)
+      rescue
+        e -> Logger.warning("Post-process event logging failed: #{inspect(e)}")
+      end
 
-    try do
-      maybe_extract_facts(conversation_id, context)
-    rescue
-      e -> Logger.warning("Post-process fact extraction failed: #{inspect(e)}")
-    end
+      try do
+        maybe_extract_facts(conversation_id, context)
+      rescue
+        e -> Logger.warning("Post-process fact extraction failed: #{inspect(e)}")
+      end
+    end)
 
     :ok
   end

@@ -95,6 +95,20 @@ defmodule PhoenixAI.Store.ConversePipelineTest do
                ConversePipeline.run("nonexistent-id", "Hello", context)
     end
 
+    test "returns error when provider is missing", %{conv: conv, context: context} do
+      context_no_provider = %{context | provider: nil}
+
+      assert {:error, {:missing_option, :provider}} =
+               ConversePipeline.run(conv.id, "Hello", context_no_provider)
+    end
+
+    test "returns error when model is missing", %{conv: conv, context: context} do
+      context_no_model = %{context | model: nil}
+
+      assert {:error, {:missing_option, :model}} =
+               ConversePipeline.run(conv.id, "Hello", context_no_model)
+    end
+
     test "respects guardrails — TokenBudget with max: 1 triggers violation", %{
       store: store,
       conv: conv,

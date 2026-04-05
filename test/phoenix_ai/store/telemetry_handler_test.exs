@@ -3,6 +3,8 @@ defmodule PhoenixAI.Store.TelemetryHandlerTest do
 
   alias PhoenixAI.Store.TelemetryHandler
 
+  require Logger
+
   setup do
     # Ensure handler is detached before each test
     TelemetryHandler.detach()
@@ -70,6 +72,81 @@ defmodule PhoenixAI.Store.TelemetryHandlerTest do
                  [:phoenix_ai, :tool_call, :stop],
                  %{duration: 500_000},
                  %{tool: "my_tool"},
+                 []
+               )
+    end
+
+    test "records cost and logs event when Logger.metadata context is set" do
+      # Start a store for the handler to use
+      store_name = :"telemetry_handler_ctx_test_#{System.unique_integer([:positive])}"
+
+      {:ok, _pid} =
+        PhoenixAI.Store.start_link(
+          name: store_name,
+          adapter: PhoenixAI.Store.Adapters.ETS,
+          event_log: [enabled: true]
+        )
+
+      # Create a conversation for context
+      {:ok, conv} =
+        PhoenixAI.Store.save_conversation(
+          %PhoenixAI.Store.Conversation{metadata: %{}},
+          store: store_name
+        )
+
+      # Set Logger metadata as a real user would
+      Logger.metadata(
+        phoenix_ai_store: %{
+          conversation_id: conv.id,
+          user_id: "test-user-1",
+          store: store_name
+        }
+      )
+
+      # Call handle_event with valid metadata
+      assert :ok =
+               TelemetryHandler.handle_event(
+                 [:phoenix_ai, :chat, :stop],
+                 %{duration: 1_000_000},
+                 %{
+                   provider: :test,
+                   model: "test-model",
+                   status: :ok,
+                   usage: %PhoenixAI.Usage{
+                     input_tokens: 10,
+                     output_tokens: 20,
+                     total_tokens: 30
+                   }
+                 },
+                 []
+               )
+
+      # Give Task.start time to complete
+      Process.sleep(100)
+
+      # Verify event was logged
+      {:ok, %{events: events}} =
+        PhoenixAI.Store.list_events(
+          [conversation_id: conv.id],
+          store: store_name
+        )
+
+      assert Enum.any?(events, fn e -> e.type == :response_received end)
+
+      # Clean up Logger metadata
+      Logger.metadata(phoenix_ai_store: nil)
+    end
+
+    test "skips processing when no Logger.metadata context is set" do
+      # Ensure no metadata is set
+      Logger.metadata(phoenix_ai_store: nil)
+
+      # Should return :ok without spawning tasks
+      assert :ok =
+               TelemetryHandler.handle_event(
+                 [:phoenix_ai, :chat, :stop],
+                 %{duration: 1_000_000},
+                 %{provider: :test, model: "test-model", status: :ok, usage: %PhoenixAI.Usage{}},
                  []
                )
     end
