@@ -25,6 +25,8 @@ defmodule PhoenixAI.Store do
   alias PhoenixAI.Guardrails.Pipeline, as: GuardrailsPipeline
   alias PhoenixAI.Guardrails.{PolicyViolation, Request}
   alias PhoenixAI.Store.Memory.Pipeline
+  alias PhoenixAI.Store.CostTracking
+  alias PhoenixAI.Store.CostTracking.CostRecord
 
   # -- Supervisor --
 
@@ -304,6 +306,91 @@ defmodule PhoenixAI.Store do
       }
 
       result = GuardrailsPipeline.run(policies, request)
+      {result, %{}}
+    end)
+  end
+
+  # -- Cost Tracking Facade --
+
+  @doc """
+  Records the cost of a single AI provider call.
+
+  Resolves the adapter and pricing provider from the store config,
+  delegates to `CostTracking.record/3`, and wraps the call in a
+  telemetry span `[:phoenix_ai_store, :cost, :record]`.
+
+  ## Options
+
+    * `:store` — the store name (default: `:phoenix_ai_store_default`)
+    * `:user_id` — user to attribute cost to
+    * `:pricing_provider` — module override for pricing lookup
+    * `:metadata` — extra metadata map
+  """
+  @spec record_cost(String.t(), PhoenixAI.Response.t(), keyword()) ::
+          {:ok, CostRecord.t()} | {:error, term()}
+  def record_cost(conversation_id, %PhoenixAI.Response{} = response, opts \\ []) do
+    :telemetry.span([:phoenix_ai_store, :cost, :record], %{}, fn ->
+      {adapter, adapter_opts, config} = resolve_adapter(opts)
+
+      cost_opts =
+        opts
+        |> Keyword.merge(adapter: adapter, adapter_opts: adapter_opts)
+        |> Keyword.put_new(
+          :pricing_provider,
+          get_in(config, [:cost_tracking, :pricing_provider]) ||
+            CostTracking.PricingProvider.Static
+        )
+
+      result = CostTracking.record(conversation_id, response, cost_opts)
+      {result, %{}}
+    end)
+  end
+
+  @doc """
+  Returns all cost records for a conversation.
+
+  Delegates to `adapter.get_cost_records/2` if the adapter supports CostStore.
+  """
+  @spec get_cost_records(String.t(), keyword()) ::
+          {:ok, [CostRecord.t()]} | {:error, term()}
+  def get_cost_records(conversation_id, opts \\ []) do
+    :telemetry.span([:phoenix_ai_store, :cost, :get_records], %{}, fn ->
+      {adapter, adapter_opts, _config} = resolve_adapter(opts)
+
+      result =
+        if function_exported?(adapter, :get_cost_records, 2) do
+          adapter.get_cost_records(conversation_id, adapter_opts)
+        else
+          {:error, :cost_store_not_supported}
+        end
+
+      {result, %{}}
+    end)
+  end
+
+  @doc """
+  Aggregates cost across records matching the given filters.
+
+  Delegates to `adapter.sum_cost/2` if the adapter supports CostStore.
+
+  ## Filters
+
+    * `:conversation_id` — filter by conversation
+    * `:user_id` — filter by user
+  """
+  @spec sum_cost(keyword(), keyword()) ::
+          {:ok, Decimal.t()} | {:error, term()}
+  def sum_cost(filters \\ [], opts \\ []) do
+    :telemetry.span([:phoenix_ai_store, :cost, :sum], %{}, fn ->
+      {adapter, adapter_opts, _config} = resolve_adapter(opts)
+
+      result =
+        if function_exported?(adapter, :sum_cost, 2) do
+          adapter.sum_cost(filters, adapter_opts)
+        else
+          {:error, :cost_store_not_supported}
+        end
+
       {result, %{}}
     end)
   end

@@ -92,6 +92,19 @@ defmodule PhoenixAI.Store.Config do
           ]
         ]
       ]
+    ],
+    cost_tracking: [
+      type: :keyword_list,
+      default: [],
+      doc: "Cost tracking configuration.",
+      keys: [
+        enabled: [type: :boolean, default: false, doc: "Enable cost tracking."],
+        pricing_provider: [
+          type: :atom,
+          default: PhoenixAI.Store.CostTracking.PricingProvider.Static,
+          doc: "Module implementing PricingProvider behaviour."
+        ]
+      ]
     ]
   ]
 
