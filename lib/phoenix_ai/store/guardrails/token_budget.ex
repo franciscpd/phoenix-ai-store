@@ -38,9 +38,10 @@ defmodule PhoenixAI.Store.Guardrails.TokenBudget do
   @impl true
   @spec check(Request.t(), keyword()) :: {:ok, Request.t()} | {:halt, PolicyViolation.t()}
   def check(%Request{} = request, opts) do
+    scope = Keyword.get(opts, :scope, :conversation)
+
     with {:ok, adapter, adapter_opts} <- extract_adapter(request),
          :ok <- validate_token_usage(adapter),
-         scope <- Keyword.get(opts, :scope, :conversation),
          {:ok, _} <- validate_scope_requirements(request, scope, opts),
          {:ok, accumulated} <- fetch_accumulated(adapter, adapter_opts, request, scope, opts) do
       estimated = estimate_request_tokens(request, opts)
@@ -92,13 +93,16 @@ defmodule PhoenixAI.Store.Guardrails.TokenBudget do
     end
   end
 
-  defp validate_scope_requirements(_request, :time_window, opts) do
+  defp validate_scope_requirements(request, :time_window, opts) do
     cond do
       not Code.ensure_loaded?(Hammer) ->
         {:halt, violation("Scope :time_window requires the :hammer dependency. Add {:hammer, \"~> 7.3\"} to your mix.exs.")}
 
       not Keyword.has_key?(opts, :window_ms) ->
         {:halt, violation("Scope :time_window requires the :window_ms option.")}
+
+      is_nil(request.user_id) and is_nil(request.conversation_id) ->
+        {:halt, violation("Scope :time_window requires user_id or conversation_id to be set on the request.")}
 
       true ->
         {:ok, :valid}

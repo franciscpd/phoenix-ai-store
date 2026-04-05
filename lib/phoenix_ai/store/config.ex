@@ -73,12 +73,6 @@ defmodule PhoenixAI.Store.Config do
       default: [],
       doc: "Guardrails configuration.",
       keys: [
-        policies: [
-          type: {:list, :any},
-          default: [],
-          doc:
-            "Default policy list [{module, opts}]. Used when no policies passed to check_guardrails/3."
-        ],
         token_budget: [
           type: :keyword_list,
           default: [],
