@@ -88,6 +88,24 @@ defmodule PhoenixAI.Store.Adapter do
                 {:ok, Decimal.t()} | {:error, term()}
   end
 
+  defmodule EventStore do
+    @moduledoc """
+    Sub-behaviour for adapters that support the append-only event log.
+    No update or delete callbacks — events are immutable once written.
+    """
+
+    alias PhoenixAI.Store.EventLog.Event
+
+    @callback log_event(Event.t(), keyword()) ::
+                {:ok, Event.t()} | {:error, term()}
+
+    @callback list_events(filters :: keyword(), keyword()) ::
+                {:ok, %{events: [Event.t()], next_cursor: String.t() | nil}}
+
+    @callback count_events(filters :: keyword(), keyword()) ::
+                {:ok, non_neg_integer()}
+  end
+
   defmodule TokenUsage do
     @moduledoc """
     Sub-behaviour for adapters that support token usage aggregation.
