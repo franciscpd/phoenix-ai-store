@@ -14,12 +14,17 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
 
       $ mix phoenix_ai_store.gen.migration --cost
 
+  For existing installations that need to add Event Log tables:
+
+      $ mix phoenix_ai_store.gen.migration --events
+
   ## Options
 
     * `--prefix` - Table name prefix (default: `phoenix_ai_store_`)
     * `--migrations-path` - Output directory (default: `priv/repo/migrations`)
     * `--ltm` - Generate only the Long-Term Memory tables (facts, profiles)
     * `--cost` - Generate only the Cost Tracking tables (cost_records)
+    * `--events` - Generate only the Event Log tables (events)
 
   """
 
@@ -32,13 +37,14 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
   def run(args) do
     {opts, _, _} =
       OptionParser.parse(args,
-        strict: [prefix: :string, migrations_path: :string, ltm: :boolean, cost: :boolean]
+        strict: [prefix: :string, migrations_path: :string, ltm: :boolean, cost: :boolean, events: :boolean]
       )
 
     prefix = Keyword.get(opts, :prefix, @default_prefix)
     migrations_path = Keyword.get(opts, :migrations_path, @default_migrations_path)
     ltm_only = Keyword.get(opts, :ltm, false)
     cost_only = Keyword.get(opts, :cost, false)
+    events_only = Keyword.get(opts, :events, false)
 
     File.mkdir_p!(migrations_path)
 
@@ -50,6 +56,9 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
 
       cost_only ->
         generate_cost_migration(prefix, slug, migrations_path)
+
+      events_only ->
+        generate_events_migration(prefix, slug, migrations_path)
 
       true ->
         existing =
@@ -157,6 +166,42 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
 
   defp fallback_cost_template_path do
     Path.join([File.cwd!(), "priv", "templates", "cost_migration.exs.eex"])
+  end
+
+  defp generate_events_migration(prefix, slug, migrations_path) do
+    existing =
+      Path.wildcard(Path.join(migrations_path, "*_add_#{slug}_events_tables.exs"))
+
+    if existing != [] do
+      Mix.shell().info("Events migration already exists: #{hd(existing)}")
+      :ok
+    else
+      template_path = find_events_template()
+      timestamp = generate_timestamp()
+      migration_module = module_from_prefix(prefix)
+      repo_module = detect_repo_module()
+
+      assigns = [prefix: prefix, migration_module: migration_module, repo_module: repo_module]
+      content = EEx.eval_file(template_path, assigns: assigns)
+
+      filename = "#{timestamp}_add_#{slug}_events_tables.exs"
+      filepath = Path.join(migrations_path, filename)
+
+      Mix.Generator.create_file(filepath, content)
+    end
+  end
+
+  defp find_events_template do
+    case Application.app_dir(:phoenix_ai_store, "priv/templates/events_migration.exs.eex") do
+      path when is_binary(path) ->
+        if File.exists?(path), do: path, else: fallback_events_template_path()
+    end
+  rescue
+    _ -> fallback_events_template_path()
+  end
+
+  defp fallback_events_template_path do
+    Path.join([File.cwd!(), "priv", "templates", "events_migration.exs.eex"])
   end
 
   defp find_ltm_template do

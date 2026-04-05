@@ -14,6 +14,7 @@ if Code.ensure_loaded?(Ecto) do
     @behaviour PhoenixAI.Store.Adapter.ProfileStore
     @behaviour PhoenixAI.Store.Adapter.TokenUsage
     @behaviour PhoenixAI.Store.Adapter.CostStore
+    @behaviour PhoenixAI.Store.Adapter.EventStore
 
     import Ecto.Query
 
@@ -25,6 +26,8 @@ if Code.ensure_loaded?(Ecto) do
     alias PhoenixAI.Store.Schemas.Profile, as: ProfileSchema
     alias PhoenixAI.Store.CostTracking.CostRecord
     alias PhoenixAI.Store.Schemas.CostRecord, as: CostRecordSchema
+    alias PhoenixAI.Store.EventLog.Event
+    alias PhoenixAI.Store.Schemas.Event, as: EventSchema
 
     @impl true
     def save_conversation(%Conversation{} = conversation, opts) do
@@ -472,5 +475,130 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     defp valid_uuid?(_), do: false
+
+    # -- EventStore --
+
+    @impl PhoenixAI.Store.Adapter.EventStore
+    def log_event(%Event{} = event, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+
+      attrs =
+        EventSchema.from_store_struct(event)
+        |> Map.update(:id, Uniq.UUID.uuid7(), fn id -> id || Uniq.UUID.uuid7() end)
+        |> Map.update(:inserted_at, DateTime.utc_now(), fn ts -> ts || DateTime.utc_now() end)
+
+      %EventSchema{}
+      |> Ecto.put_meta(source: event_table_name(opts))
+      |> EventSchema.changeset(attrs)
+      |> repo.insert()
+      |> handle_event_result()
+    end
+
+    @impl PhoenixAI.Store.Adapter.EventStore
+    def list_events(filters, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+      limit = Keyword.get(filters, :limit)
+      cursor = Keyword.get(filters, :cursor)
+
+      query =
+        from(e in event_source(opts), order_by: [asc: e.inserted_at, asc: e.id])
+        |> apply_event_filters(filters)
+        |> maybe_apply_ecto_cursor(cursor)
+        |> maybe_apply_ecto_limit(limit)
+
+      events =
+        repo.all(query)
+        |> Enum.map(&EventSchema.to_store_struct/1)
+
+      next_cursor =
+        if limit && length(events) == limit do
+          last = List.last(events)
+          encode_event_cursor(last)
+        else
+          nil
+        end
+
+      {:ok, %{events: events, next_cursor: next_cursor}}
+    end
+
+    @impl PhoenixAI.Store.Adapter.EventStore
+    def count_events(filters, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+
+      count =
+        from(e in event_source(opts), select: count(e.id))
+        |> apply_event_filters(filters)
+        |> repo.one()
+
+      {:ok, count}
+    end
+
+    defp apply_event_filters(query, []), do: query
+
+    defp apply_event_filters(query, [{:conversation_id, conv_id} | rest]) do
+      query
+      |> where([e], e.conversation_id == ^conv_id)
+      |> apply_event_filters(rest)
+    end
+
+    defp apply_event_filters(query, [{:user_id, user_id} | rest]) do
+      query
+      |> where([e], e.user_id == ^user_id)
+      |> apply_event_filters(rest)
+    end
+
+    defp apply_event_filters(query, [{:type, type} | rest]) do
+      query
+      |> where([e], e.type == ^to_string(type))
+      |> apply_event_filters(rest)
+    end
+
+    defp apply_event_filters(query, [{:after, dt} | rest]) do
+      query
+      |> where([e], e.inserted_at >= ^dt)
+      |> apply_event_filters(rest)
+    end
+
+    defp apply_event_filters(query, [{:before, dt} | rest]) do
+      query
+      |> where([e], e.inserted_at <= ^dt)
+      |> apply_event_filters(rest)
+    end
+
+    defp apply_event_filters(query, [_ | rest]), do: apply_event_filters(query, rest)
+
+    defp maybe_apply_ecto_cursor(query, nil), do: query
+
+    defp maybe_apply_ecto_cursor(query, cursor) do
+      {cursor_ts, cursor_id} = decode_event_cursor(cursor)
+
+      where(
+        query,
+        [e],
+        e.inserted_at > ^cursor_ts or (e.inserted_at == ^cursor_ts and e.id > ^cursor_id)
+      )
+    end
+
+    defp maybe_apply_ecto_limit(query, nil), do: query
+    defp maybe_apply_ecto_limit(query, limit), do: limit(query, ^limit)
+
+    defp event_source(opts), do: {event_table_name(opts), EventSchema}
+
+    defp event_table_name(opts),
+      do: Keyword.get(opts, :prefix, "phoenix_ai_store_") <> "events"
+
+    defp handle_event_result({:ok, schema}), do: {:ok, EventSchema.to_store_struct(schema)}
+    defp handle_event_result({:error, changeset}), do: {:error, changeset}
+
+    defp encode_event_cursor(%Event{} = event) do
+      Base.url_encode64("#{DateTime.to_iso8601(event.inserted_at)}|#{event.id}", padding: false)
+    end
+
+    defp decode_event_cursor(cursor) do
+      {:ok, decoded} = Base.url_decode64(cursor, padding: false)
+      [ts_str, id] = String.split(decoded, "|", parts: 2)
+      {:ok, ts, _} = DateTime.from_iso8601(ts_str)
+      {ts, id}
+    end
   end
 end

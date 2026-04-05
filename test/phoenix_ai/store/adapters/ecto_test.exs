@@ -11,4 +11,5 @@ defmodule PhoenixAI.Store.Adapters.EctoTest do
   use PhoenixAI.Store.ProfileStoreContractTest, adapter: PhoenixAI.Store.Adapters.Ecto
   use PhoenixAI.Store.TokenUsageContractTest, adapter: PhoenixAI.Store.Adapters.Ecto
   use PhoenixAI.Store.CostStoreContractTest, adapter: PhoenixAI.Store.Adapters.Ecto
+  use PhoenixAI.Store.EventStoreContractTest, adapter: PhoenixAI.Store.Adapters.Ecto
 end
