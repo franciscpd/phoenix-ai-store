@@ -12,6 +12,16 @@ defmodule PhoenixAI.Store.LongTermMemory do
 
   # -- Manual CRUD: Facts --
 
+  @doc """
+  Persists a long-term memory fact for a user.
+
+  Performs an upsert keyed on `{user_id, key}` — if a fact with the same key
+  already exists for the user it will be updated, otherwise a new row is created.
+
+  ## Examples
+
+      {:ok, fact} = LongTermMemory.save_fact(%Fact{user_id: "u1", key: "language", value: "Elixir"})
+  """
   @spec save_fact(Fact.t(), keyword()) :: {:ok, Fact.t()} | {:error, term()}
   def save_fact(%Fact{} = fact, opts \\ []) do
     :telemetry.span([:phoenix_ai_store, :fact, :save], %{}, fn ->
@@ -24,6 +34,13 @@ defmodule PhoenixAI.Store.LongTermMemory do
     end)
   end
 
+  @doc """
+  Returns all stored facts for a user, ordered by insertion time.
+
+  ## Examples
+
+      {:ok, facts} = LongTermMemory.get_facts("u1")
+  """
   @spec get_facts(String.t(), keyword()) :: {:ok, [Fact.t()]} | {:error, term()}
   def get_facts(user_id, opts \\ []) do
     :telemetry.span([:phoenix_ai_store, :fact, :get], %{}, fn ->
@@ -36,6 +53,15 @@ defmodule PhoenixAI.Store.LongTermMemory do
     end)
   end
 
+  @doc """
+  Deletes a specific fact by key for a user.
+
+  Returns `:ok` whether or not the fact existed.
+
+  ## Examples
+
+      :ok = LongTermMemory.delete_fact("u1", "language")
+  """
   @spec delete_fact(String.t(), String.t(), keyword()) :: :ok | {:error, term()}
   def delete_fact(user_id, key, opts \\ []) do
     :telemetry.span([:phoenix_ai_store, :fact, :delete], %{}, fn ->
@@ -50,6 +76,16 @@ defmodule PhoenixAI.Store.LongTermMemory do
 
   # -- Manual CRUD: Profiles --
 
+  @doc """
+  Persists a user profile summary.
+
+  Performs an upsert keyed on `user_id` — if a profile already exists for the
+  user it will be replaced, otherwise a new one is created.
+
+  ## Examples
+
+      {:ok, profile} = LongTermMemory.save_profile(%Profile{user_id: "u1", summary: "Elixir developer"})
+  """
   @spec save_profile(Profile.t(), keyword()) :: {:ok, Profile.t()} | {:error, term()}
   def save_profile(%Profile{} = profile, opts \\ []) do
     :telemetry.span([:phoenix_ai_store, :profile, :save], %{}, fn ->
@@ -62,6 +98,16 @@ defmodule PhoenixAI.Store.LongTermMemory do
     end)
   end
 
+  @doc """
+  Loads the profile for a user by ID.
+
+  Returns `{:error, :not_found}` if no profile exists for the user.
+
+  ## Examples
+
+      {:ok, profile} = LongTermMemory.get_profile("u1")
+      {:error, :not_found} = LongTermMemory.get_profile("unknown")
+  """
   @spec get_profile(String.t(), keyword()) :: {:ok, Profile.t()} | {:error, :not_found | term()}
   def get_profile(user_id, opts \\ []) do
     :telemetry.span([:phoenix_ai_store, :profile, :get], %{}, fn ->
@@ -74,6 +120,15 @@ defmodule PhoenixAI.Store.LongTermMemory do
     end)
   end
 
+  @doc """
+  Deletes the profile for a user.
+
+  Returns `:ok` whether or not a profile existed.
+
+  ## Examples
+
+      :ok = LongTermMemory.delete_profile("u1")
+  """
   @spec delete_profile(String.t(), keyword()) :: :ok | {:error, term()}
   def delete_profile(user_id, opts \\ []) do
     :telemetry.span([:phoenix_ai_store, :profile, :delete], %{}, fn ->
@@ -88,6 +143,25 @@ defmodule PhoenixAI.Store.LongTermMemory do
 
   # -- Extraction --
 
+  @doc """
+  Extracts new facts from a conversation's unprocessed messages and persists them.
+
+  Uses a cursor stored in `conversation.metadata["_ltm_cursor"]` to process only
+  messages added since the last extraction. Pass `extraction_mode: :async` to run
+  extraction in a supervised Task and return `{:ok, :async}` immediately.
+
+  ## Options
+
+    * `:extraction_mode` — `:sync` (default) or `:async`
+    * `:extractor` — extractor module (default: `Extractor.Default`)
+    * `:max_facts_per_user` — cap on total facts per user (default: `100`)
+    * `:provider` / `:model` — AI provider options forwarded to the extractor
+
+  ## Examples
+
+      {:ok, facts} = LongTermMemory.extract_facts(conversation_id)
+      {:ok, :async} = LongTermMemory.extract_facts(conversation_id, extraction_mode: :async)
+  """
   @spec extract_facts(String.t(), keyword()) ::
           {:ok, [Fact.t()]} | {:ok, :async} | {:error, term()}
   def extract_facts(conversation_id, opts \\ []) do
@@ -206,6 +280,22 @@ defmodule PhoenixAI.Store.LongTermMemory do
 
   # -- Profile Update --
 
+  @doc """
+  Regenerates and saves a user profile summary from their stored facts.
+
+  Reads all facts for `user_id`, calls an AI provider (or a custom `:profile_fn`)
+  to produce a new summary and metadata map, then upserts the result via
+  `save_profile/2`. Requires `:provider` in opts (or a `:profile_fn` override).
+
+  ## Options
+
+    * `:provider` / `:model` — AI provider options
+    * `:profile_fn` — `fun(existing_profile, facts, context, opts) :: {:ok, map} | {:error, term}`
+
+  ## Examples
+
+      {:ok, profile} = LongTermMemory.update_profile("u1", provider: :openai, model: "gpt-4o")
+  """
   @spec update_profile(String.t(), keyword()) :: {:ok, Profile.t()} | {:error, term()}
   def update_profile(user_id, opts \\ []) do
     :telemetry.span([:phoenix_ai_store, :profile, :update], %{}, fn ->
