@@ -33,7 +33,7 @@ defmodule PhoenixAI.Store.MixProject do
 
   defp deps do
     [
-      {:phoenix_ai, "~> 0.2"},
+      {:phoenix_ai, "~> 0.3"},
       {:jason, "~> 1.4"},
       {:nimble_options, "~> 1.1"},
       {:telemetry, "~> 1.3"},
@@ -43,6 +43,9 @@ defmodule PhoenixAI.Store.MixProject do
       {:ecto, "~> 3.13", optional: true},
       {:ecto_sql, "~> 3.13", optional: true},
       {:postgrex, "~> 0.19", optional: true},
+
+      # Optional — Guardrails time-window rate limiting
+      {:hammer, "~> 7.3", optional: true},
 
       # Dev/Test
       {:mox, "~> 1.2", only: :test},
