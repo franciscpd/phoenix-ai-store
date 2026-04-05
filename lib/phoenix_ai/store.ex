@@ -27,6 +27,10 @@ defmodule PhoenixAI.Store do
   alias PhoenixAI.Store.Memory.Pipeline
   alias PhoenixAI.Store.CostTracking
   alias PhoenixAI.Store.CostTracking.CostRecord
+  alias PhoenixAI.Store.EventLog
+  alias PhoenixAI.Store.EventLog.Event
+
+  require Logger
 
   # -- Supervisor --
 
@@ -78,6 +82,15 @@ defmodule PhoenixAI.Store do
           |> Map.put(:updated_at, now)
 
         result = adapter.save_conversation(conv, adapter_opts)
+
+        with {:ok, saved} <- result do
+          maybe_log_event(:conversation_created, %{
+            conversation_id: saved.id,
+            user_id: saved.user_id,
+            title: saved.title
+          }, opts)
+        end
+
         {result, %{}}
       end
     end)
@@ -203,6 +216,16 @@ defmodule PhoenixAI.Store do
         |> Map.put(:conversation_id, conversation_id)
 
       result = adapter.add_message(conversation_id, msg, adapter_opts)
+
+      with {:ok, saved_msg} <- result do
+        maybe_log_event(:message_sent, %{
+          conversation_id: conversation_id,
+          role: saved_msg.role,
+          content: saved_msg.content,
+          token_count: saved_msg.token_count
+        }, opts)
+      end
+
       {result, %{}}
     end)
   end
@@ -251,11 +274,19 @@ defmodule PhoenixAI.Store do
       }
 
       with {:ok, messages} <- adapter.get_messages(conversation_id, adapter_opts) do
+        before_count = length(messages)
         messages = maybe_inject_ltm(messages, adapter, adapter_opts, opts)
 
         case Pipeline.run(pipeline, messages, context) do
           {:ok, filtered} ->
             result = {:ok, Enum.map(filtered, &Message.to_phoenix_ai/1)}
+
+            maybe_log_event(:memory_trimmed, %{
+              conversation_id: conversation_id,
+              before_count: before_count,
+              after_count: length(filtered)
+            }, opts)
+
             {result, %{}}
 
           {:error, _} = error ->
@@ -306,6 +337,16 @@ defmodule PhoenixAI.Store do
       }
 
       result = GuardrailsPipeline.run(policies, request)
+
+      with {:error, %PhoenixAI.Guardrails.PolicyViolation{} = v} <- result do
+        maybe_log_event(:policy_violation, %{
+          conversation_id: request.conversation_id,
+          user_id: request.user_id,
+          policy: inspect(v.policy),
+          reason: v.reason
+        }, opts)
+      end
+
       {result, %{}}
     end)
   end
@@ -342,6 +383,17 @@ defmodule PhoenixAI.Store do
         )
 
       result = CostTracking.record(conversation_id, response, cost_opts)
+
+      with {:ok, record} <- result do
+        maybe_log_event(:cost_recorded, %{
+          conversation_id: conversation_id,
+          user_id: record.user_id,
+          provider: record.provider,
+          model: record.model,
+          total_cost: Decimal.to_string(record.total_cost)
+        }, opts)
+      end
+
       {result, %{}}
     end)
   end
@@ -393,6 +445,77 @@ defmodule PhoenixAI.Store do
           adapter.sum_cost(filters, adapter_opts)
         else
           {:error, :cost_store_not_supported}
+        end
+
+      {result, %{}}
+    end)
+  end
+
+  # -- Event Log Facade --
+
+  @doc """
+  Logs an event through the EventLog orchestrator.
+
+  Resolves the adapter, injects `redact_fn` from config, and delegates
+  to `EventLog.log/3`.
+  """
+  @spec log_event(Event.t() | {atom(), map()}, keyword()) ::
+          {:ok, Event.t()} | {:error, term()}
+  def log_event(%Event{type: type, data: data} = event, opts \\ []) do
+    :telemetry.span([:phoenix_ai_store, :event, :log_event], %{}, fn ->
+      {adapter, adapter_opts, config} = resolve_adapter(opts)
+
+      event_opts = [
+        adapter: adapter,
+        adapter_opts: adapter_opts,
+        conversation_id: event.conversation_id,
+        user_id: event.user_id,
+        redact_fn: get_in(config, [:event_log, :redact_fn])
+      ]
+
+      result = EventLog.log(type, data, event_opts)
+      {result, %{}}
+    end)
+  end
+
+  @doc """
+  Lists events matching the given filters.
+
+  Delegates to `adapter.list_events/2` if the adapter supports EventStore.
+  """
+  @spec list_events(keyword(), keyword()) ::
+          {:ok, %{events: [Event.t()], next_cursor: String.t() | nil}} | {:error, term()}
+  def list_events(filters \\ [], opts \\ []) do
+    :telemetry.span([:phoenix_ai_store, :event, :list], %{}, fn ->
+      {adapter, adapter_opts, _config} = resolve_adapter(opts)
+
+      result =
+        if function_exported?(adapter, :list_events, 2) do
+          adapter.list_events(filters, adapter_opts)
+        else
+          {:error, :event_store_not_supported}
+        end
+
+      {result, %{}}
+    end)
+  end
+
+  @doc """
+  Counts events matching the given filters.
+
+  Delegates to `adapter.count_events/2` if the adapter supports EventStore.
+  """
+  @spec count_events(keyword(), keyword()) ::
+          {:ok, non_neg_integer()} | {:error, term()}
+  def count_events(filters \\ [], opts \\ []) do
+    :telemetry.span([:phoenix_ai_store, :event, :count], %{}, fn ->
+      {adapter, adapter_opts, _config} = resolve_adapter(opts)
+
+      result =
+        if function_exported?(adapter, :count_events, 2) do
+          adapter.count_events(filters, adapter_opts)
+        else
+          {:error, :event_store_not_supported}
         end
 
       {result, %{}}
@@ -468,6 +591,30 @@ defmodule PhoenixAI.Store do
     config = Instance.get_config(store)
     adapter_opts = Instance.get_adapter_opts(store)
     {config[:adapter], adapter_opts, config}
+  end
+
+  defp maybe_log_event(type, data, opts) do
+    {_adapter, _adapter_opts, config} = resolve_adapter(opts)
+
+    if get_in(config, [:event_log, :enabled]) do
+      {adapter, adapter_opts, _} = resolve_adapter(opts)
+
+      event_opts = [
+        adapter: adapter,
+        adapter_opts: adapter_opts,
+        conversation_id: data[:conversation_id],
+        user_id: data[:user_id],
+        redact_fn: get_in(config, [:event_log, :redact_fn])
+      ]
+
+      try do
+        EventLog.log(type, Map.drop(data, [:conversation_id, :user_id]), event_opts)
+      rescue
+        e -> Logger.warning("Event log failed: #{inspect(e)}")
+      end
+    end
+
+    :ok
   end
 
   defp maybe_generate_id(%{id: nil} = struct) do

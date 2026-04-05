@@ -105,6 +105,20 @@ defmodule PhoenixAI.Store.Config do
           doc: "Module implementing PricingProvider behaviour."
         ]
       ]
+    ],
+    event_log: [
+      type: :keyword_list,
+      default: [],
+      doc: "Event log configuration.",
+      keys: [
+        enabled: [type: :boolean, default: false, doc: "Enable event logging."],
+        redact_fn: [
+          type: {:or, [{:fun, 1}, nil]},
+          default: nil,
+          doc:
+            "Function (Event.t()) -> Event.t() to redact sensitive data before persistence."
+        ]
+      ]
     ]
   ]
 
