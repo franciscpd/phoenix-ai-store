@@ -18,7 +18,11 @@ defmodule PhoenixAI.Store.MixProject do
       package: package(),
       name: "PhoenixAI.Store",
       source_url: @source_url,
-      docs: docs()
+      docs: docs(),
+      dialyzer: [
+        plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
+        ignore_warnings: ".dialyzer_ignore.exs"
+      ]
     ]
   end
 
