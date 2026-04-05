@@ -459,7 +459,7 @@ defmodule PhoenixAI.Store do
   Resolves the adapter, injects `redact_fn` from config, and delegates
   to `EventLog.log/3`.
   """
-  @spec log_event(Event.t() | {atom(), map()}, keyword()) ::
+  @spec log_event(Event.t(), keyword()) ::
           {:ok, Event.t()} | {:error, term()}
   def log_event(%Event{type: type, data: data} = event, opts \\ []) do
     :telemetry.span([:phoenix_ai_store, :event, :log_event], %{}, fn ->
@@ -594,11 +594,9 @@ defmodule PhoenixAI.Store do
   end
 
   defp maybe_log_event(type, data, opts) do
-    {_adapter, _adapter_opts, config} = resolve_adapter(opts)
+    {adapter, adapter_opts, config} = resolve_adapter(opts)
 
     if get_in(config, [:event_log, :enabled]) do
-      {adapter, adapter_opts, _} = resolve_adapter(opts)
-
       event_opts = [
         adapter: adapter,
         adapter_opts: adapter_opts,

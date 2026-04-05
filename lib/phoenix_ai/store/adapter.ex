@@ -92,6 +92,14 @@ defmodule PhoenixAI.Store.Adapter do
     @moduledoc """
     Sub-behaviour for adapters that support the append-only event log.
     No update or delete callbacks — events are immutable once written.
+
+    ## Audit trail preservation
+
+    Events are intentionally NOT deleted when a conversation is deleted.
+    The event log is an audit trail that persists beyond the lifecycle of
+    individual conversations. This is by design — if a conversation is
+    soft-deleted or hard-deleted, its associated events remain queryable
+    for compliance, debugging, and cost attribution purposes.
     """
 
     alias PhoenixAI.Store.EventLog.Event
