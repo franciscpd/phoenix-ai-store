@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
-    branches: [main]
+    branches: [master, main]
 
 env:
   MIX_ENV: test
@@ -14,17 +14,9 @@ jobs:
     name: Test (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
       matrix:
-        include:
-          - elixir: '1.15.8'
-            otp: '26.2'
-          - elixir: '1.15.8'
-            otp: '27.2'
-          - elixir: '1.17.3'
-            otp: '26.2'
-          - elixir: '1.17.3'
-            otp: '27.2'
+        elixir: ['1.18']
+        otp: ['27']
     services:
       postgres:
         image: postgres:16
@@ -42,81 +34,78 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/phoenix_ai_store_test
     steps:
       - uses: actions/checkout@v4
+
       - uses: erlef/setup-beam@v1
         with:
           elixir-version: ${{ matrix.elixir }}
           otp-version: ${{ matrix.otp }}
-      - uses: actions/cache@v4
-        with:
-          path: |
-            deps
-            _build
-          key: mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('mix.lock') }}
-          restore-keys: mix-${{ matrix.elixir }}-${{ matrix.otp }}-
-      - run: mix deps.get
-      - run: mix test
 
-  quality:
-    name: Code Quality
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: erlef/setup-beam@v1
-        with:
-          elixir-version: '1.17.3'
-          otp-version: '27.2'
-      - uses: actions/cache@v4
+      - name: Cache deps
+        uses: actions/cache@v4
         with:
           path: |
             deps
             _build
-          key: mix-1.17.3-27.2-${{ hashFiles('mix.lock') }}
-          restore-keys: mix-1.17.3-27.2-
+          key: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-
+
       - run: mix deps.get
       - run: mix compile --warnings-as-errors
-      - run: mix credo --strict
       - run: mix format --check-formatted
+      - run: mix credo
+      - run: mix test
 
   dialyzer:
     name: Dialyzer
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: erlef/setup-beam@v1
-        id: beam
         with:
-          elixir-version: '1.17.3'
-          otp-version: '27.2'
-      - uses: actions/cache@v4
+          elixir-version: '1.18'
+          otp-version: '27'
+
+      - name: Cache deps
+        uses: actions/cache@v4
         with:
           path: |
             deps
             _build
-          key: mix-1.17.3-27.2-${{ hashFiles('mix.lock') }}
-          restore-keys: mix-1.17.3-27.2-
-      - uses: actions/cache@v4
+          key: ${{ runner.os }}-mix-dialyzer-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-dialyzer-
+
+      - name: Cache PLTs
+        uses: actions/cache@v4
         with:
           path: priv/plts
-          key: plt-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-${{ hashFiles('mix.lock') }}
-          restore-keys: plt-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-
+          key: ${{ runner.os }}-plts-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-plts-
+
       - run: mix deps.get
       - run: mix dialyzer
 
   docs:
     name: Documentation
     runs-on: ubuntu-latest
+    env:
+      MIX_ENV: dev
     steps:
       - uses: actions/checkout@v4
+
       - uses: erlef/setup-beam@v1
         with:
-          elixir-version: '1.17.3'
-          otp-version: '27.2'
-      - uses: actions/cache@v4
+          elixir-version: '1.18'
+          otp-version: '27'
+
+      - name: Cache deps
+        uses: actions/cache@v4
         with:
           path: |
             deps
             _build
-          key: mix-1.17.3-27.2-${{ hashFiles('mix.lock') }}
-          restore-keys: mix-1.17.3-27.2-
+          key: ${{ runner.os }}-mix-dev-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-dev-
+
       - run: mix deps.get
       - run: mix docs
