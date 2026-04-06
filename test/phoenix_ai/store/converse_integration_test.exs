@@ -136,6 +136,39 @@ defmodule PhoenixAI.Store.ConverseIntegrationTest do
                  to: self()
                )
     end
+
+    test "dispatches chunks via on_chunk callback during streaming", %{
+      store: store,
+      conv_id: conv_id
+    } do
+      set_responses([
+        {:ok,
+         %PhoenixAI.Response{
+           content: "Hi!",
+           usage: %PhoenixAI.Usage{input_tokens: 5, output_tokens: 3, total_tokens: 8}
+         }}
+      ])
+
+      test_pid = self()
+
+      {:ok, response} =
+        Store.converse(conv_id, "Hello",
+          provider: :test,
+          model: "test-model",
+          api_key: "test-key",
+          store: store,
+          on_chunk: fn chunk -> send(test_pid, {:test_chunk, chunk}) end
+        )
+
+      assert response.content == "Hi!"
+
+      # TestProvider.stream/3 splits "Hi!" into graphemes: "H", "i", "!"
+      assert_received {:test_chunk, %PhoenixAI.StreamChunk{delta: "H"}}
+      assert_received {:test_chunk, %PhoenixAI.StreamChunk{delta: "i"}}
+      assert_received {:test_chunk, %PhoenixAI.StreamChunk{delta: "!"}}
+      # Final chunk with finish_reason
+      assert_received {:test_chunk, %PhoenixAI.StreamChunk{finish_reason: "stop"}}
+    end
   end
 
   describe "track/1" do

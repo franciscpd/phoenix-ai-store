@@ -147,13 +147,22 @@ defmodule PhoenixAI.Store.ConversePipeline do
     end
   end
 
-  # Step 5: Call AI
+  # Step 5: Call AI (streaming or blocking)
   defp call_ai(messages, context) do
-    opts =
+    base_opts =
       [provider: context.provider, model: context.model, api_key: context.api_key]
       |> maybe_add_tools(context[:tools])
 
-    AI.chat(messages, opts)
+    cond do
+      is_function(context[:on_chunk]) ->
+        AI.stream(messages, Keyword.put(base_opts, :on_chunk, context.on_chunk))
+
+      is_pid(context[:to]) ->
+        AI.stream(messages, Keyword.put(base_opts, :to, context.to))
+
+      true ->
+        AI.chat(messages, base_opts)
+    end
   end
 
   defp maybe_add_tools(opts, nil), do: opts
