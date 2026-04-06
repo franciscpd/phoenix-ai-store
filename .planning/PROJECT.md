@@ -25,7 +25,20 @@ Conversations persist and restore transparently across process restarts, with me
 
 ### Active
 
-(None yet — planning next milestone)
+- [ ] Unify cost record querying into filter-based API (breaking change to CostStore behaviour)
+- [ ] Global cost and event queries for dashboard views without conversation_id
+- [ ] Cursor-based pagination for cost records
+
+## Current Milestone: v0.3.0 Dashboard Queries
+
+**Goal:** Enable global cost and event querying without requiring a conversation_id, so consumers can build dashboard views.
+
+**Target features:**
+- Unify `get_cost_records` into a filter-based API (conversation_id becomes optional filter)
+- Update `CostStore` behaviour callback signature
+- Update both adapters (Ecto + ETS)
+- Add cursor-based pagination for cost records
+- Verify events API filter coverage is sufficient
 
 ### Out of Scope
 
@@ -90,4 +103,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-06 after v0.2.0 milestone*
+*Last updated: 2026-04-06 after v0.3.0 milestone start*
