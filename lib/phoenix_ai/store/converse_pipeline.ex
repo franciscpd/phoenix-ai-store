@@ -19,7 +19,10 @@ defmodule PhoenixAI.Store.ConversePipeline do
         guardrails: nil,
         user_id: "user-1",
         extract_facts: false,
-        store: :my_store
+        store: :my_store,
+        on_chunk: nil,
+        to: nil,
+        streaming: false
       }
 
       {:ok, response} = ConversePipeline.run(conversation_id, "Hello", context)
@@ -49,11 +52,17 @@ defmodule PhoenixAI.Store.ConversePipeline do
 
   defp validate_context(context) do
     cond do
-      is_nil(context[:provider]) -> {:error, {:missing_option, :provider}}
-      is_nil(context[:model]) -> {:error, {:missing_option, :model}}
-      is_function(context[:on_chunk]) and is_pid(context[:to]) ->
+      is_nil(context[:provider]) ->
+        {:error, {:missing_option, :provider}}
+
+      is_nil(context[:model]) ->
+        {:error, {:missing_option, :model}}
+
+      is_function(context[:on_chunk], 1) and is_pid(context[:to]) ->
         {:error, :conflicting_streaming_options}
-      true -> :ok
+
+      true ->
+        :ok
     end
   end
 
@@ -154,7 +163,7 @@ defmodule PhoenixAI.Store.ConversePipeline do
       |> maybe_add_tools(context[:tools])
 
     cond do
-      is_function(context[:on_chunk]) ->
+      is_function(context[:on_chunk], 1) ->
         AI.stream(messages, Keyword.put(base_opts, :on_chunk, context.on_chunk))
 
       is_pid(context[:to]) ->
