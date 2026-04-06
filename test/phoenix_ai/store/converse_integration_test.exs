@@ -197,6 +197,83 @@ defmodule PhoenixAI.Store.ConverseIntegrationTest do
     end
   end
 
+  describe "converse/3 streaming telemetry" do
+    test "includes streaming: true in telemetry span metadata when on_chunk given", %{
+      store: store,
+      conv_id: conv_id
+    } do
+      ref = make_ref()
+
+      :telemetry.attach(
+        "test-streaming-meta-#{inspect(ref)}",
+        [:phoenix_ai_store, :converse, :stop],
+        fn _event, _measurements, metadata, test_pid ->
+          send(test_pid, {:telemetry_meta, metadata})
+        end,
+        self()
+      )
+
+      set_responses([
+        {:ok,
+         %PhoenixAI.Response{
+           content: "Hi",
+           usage: %PhoenixAI.Usage{input_tokens: 5, output_tokens: 2, total_tokens: 7}
+         }}
+      ])
+
+      {:ok, _} =
+        Store.converse(conv_id, "Hello",
+          provider: :test,
+          model: "test-model",
+          api_key: "test-key",
+          store: store,
+          on_chunk: fn _chunk -> :ok end
+        )
+
+      assert_received {:telemetry_meta, metadata}
+      assert metadata.streaming == true
+
+      :telemetry.detach("test-streaming-meta-#{inspect(ref)}")
+    end
+
+    test "includes streaming: false in telemetry span metadata when no streaming opts", %{
+      store: store,
+      conv_id: conv_id
+    } do
+      ref = make_ref()
+
+      :telemetry.attach(
+        "test-no-streaming-meta-#{inspect(ref)}",
+        [:phoenix_ai_store, :converse, :stop],
+        fn _event, _measurements, metadata, test_pid ->
+          send(test_pid, {:telemetry_meta, metadata})
+        end,
+        self()
+      )
+
+      set_responses([
+        {:ok,
+         %PhoenixAI.Response{
+           content: "Hi",
+           usage: %PhoenixAI.Usage{input_tokens: 5, output_tokens: 2, total_tokens: 7}
+         }}
+      ])
+
+      {:ok, _} =
+        Store.converse(conv_id, "Hello",
+          provider: :test,
+          model: "test-model",
+          api_key: "test-key",
+          store: store
+        )
+
+      assert_received {:telemetry_meta, metadata}
+      assert metadata.streaming == false
+
+      :telemetry.detach("test-no-streaming-meta-#{inspect(ref)}")
+    end
+  end
+
   describe "track/1" do
     test "logs custom event via simplified map API", %{store: store, conv_id: conv_id} do
       assert {:ok, %Event{type: :custom_action}} =

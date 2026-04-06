@@ -604,7 +604,7 @@ defmodule PhoenixAI.Store do
       }
 
       result = ConversePipeline.run(conversation_id, message, context)
-      {result, %{}}
+      {result, %{streaming: context.streaming}}
     end)
   end
 
