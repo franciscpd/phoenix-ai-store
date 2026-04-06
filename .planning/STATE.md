@@ -4,10 +4,10 @@ milestone: v0.2.0
 milestone_name: Streaming Support
 status: planning
 stopped_at: null
-last_updated: "2026-04-05T22:16:00.000Z"
-last_activity: 2026-04-05 — Milestone v0.2.0 started
+last_updated: "2026-04-05T22:30:00.000Z"
+last_activity: 2026-04-05 — Roadmap created, Phase 10 defined
 progress:
-  total_phases: 0
+  total_phases: 1
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-05)
 
 **Core value:** Conversations persist and restore transparently across process restarts, with memory strategies keeping them within context window limits
-**Current focus:** Milestone v0.2.0 — Streaming Support
+**Current focus:** Milestone v0.2.0 — Phase 10: Streaming Support
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-04-05 — Milestone v0.2.0 started
+Phase: 10 of 10 (Streaming Support)
+Plan: — (TBD)
+Status: Ready to plan
+Last activity: 2026-04-05 — Roadmap created, Phase 10 defined
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -42,7 +44,7 @@ Last activity: 2026-04-05 — Milestone v0.2.0 started
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 10 | TBD | - | - |
 
 **Recent Trend:**
 
@@ -60,6 +62,7 @@ Recent decisions affecting current work:
 
 - v0.1.0 Phase 1: Wrap entire Ecto adapter `defmodule` in `if Code.ensure_loaded?(Ecto)` — not individual macros
 - v0.1.0 Phase 1: InMemory adapter must use a supervised GenServer as ETS table owner — not the calling process
+- v0.2.0: Single phase for entire streaming milestone — ~35 LOC across 2 files (store.ex, converse_pipeline.ex); no artificial split warranted
 
 ### Pending Todos
 
@@ -72,5 +75,5 @@ None — PhoenixAI already has full streaming support (`AI.stream/2`, all provid
 ## Session Continuity
 
 Last session: 2026-04-05
-Stopped at: Milestone v0.2.0 initialization
+Stopped at: Roadmap created — Phase 10 defined, ready for plan-phase
 Resume file: —
