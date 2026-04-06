@@ -274,6 +274,73 @@ defmodule PhoenixAI.Store.ConverseIntegrationTest do
     end
   end
 
+  describe "converse/3 streaming event log" do
+    test "event log includes streaming: true in metadata when streaming", %{
+      store: store,
+      conv_id: conv_id
+    } do
+      set_responses([
+        {:ok,
+         %PhoenixAI.Response{
+           content: "Streamed",
+           usage: %PhoenixAI.Usage{input_tokens: 5, output_tokens: 3, total_tokens: 8}
+         }}
+      ])
+
+      {:ok, _} =
+        Store.converse(conv_id, "Hello",
+          provider: :test,
+          model: "test-model",
+          api_key: "test-key",
+          store: store,
+          on_chunk: fn _chunk -> :ok end
+        )
+
+      # Allow async post-processing task to complete
+      Process.sleep(100)
+
+      {:ok, %{events: events}} = Store.list_events([], store: store)
+
+      response_event =
+        Enum.find(events, &(&1.type == :response_received))
+
+      assert response_event
+      assert response_event.data.streaming == true
+    end
+
+    test "event log includes streaming: false in metadata when not streaming", %{
+      store: store,
+      conv_id: conv_id
+    } do
+      set_responses([
+        {:ok,
+         %PhoenixAI.Response{
+           content: "Blocked",
+           usage: %PhoenixAI.Usage{input_tokens: 5, output_tokens: 3, total_tokens: 8}
+         }}
+      ])
+
+      {:ok, _} =
+        Store.converse(conv_id, "Hello",
+          provider: :test,
+          model: "test-model",
+          api_key: "test-key",
+          store: store
+        )
+
+      # Allow async post-processing task to complete
+      Process.sleep(100)
+
+      {:ok, %{events: events}} = Store.list_events([], store: store)
+
+      response_event =
+        Enum.find(events, &(&1.type == :response_received))
+
+      assert response_event
+      assert response_event.data.streaming == false
+    end
+  end
+
   describe "track/1" do
     test "logs custom event via simplified map API", %{store: store, conv_id: conv_id} do
       assert {:ok, %Event{type: :custom_action}} =

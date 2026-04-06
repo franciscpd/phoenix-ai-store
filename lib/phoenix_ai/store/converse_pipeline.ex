@@ -237,7 +237,7 @@ defmodule PhoenixAI.Store.ConversePipeline do
         user_id: context[:user_id]
       ]
 
-      EventLog.log(:response_received, %{}, event_opts)
+      EventLog.log(:response_received, %{streaming: context[:streaming] || false}, event_opts)
     end
   end
 
