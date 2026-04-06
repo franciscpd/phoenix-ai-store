@@ -51,6 +51,8 @@ defmodule PhoenixAI.Store.ConversePipeline do
     cond do
       is_nil(context[:provider]) -> {:error, {:missing_option, :provider}}
       is_nil(context[:model]) -> {:error, {:missing_option, :model}}
+      is_function(context[:on_chunk]) and is_pid(context[:to]) ->
+        {:error, :conflicting_streaming_options}
       true -> :ok
     end
   end

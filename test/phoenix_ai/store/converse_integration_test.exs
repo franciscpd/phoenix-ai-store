@@ -124,6 +124,18 @@ defmodule PhoenixAI.Store.ConverseIntegrationTest do
       assert :conversation_created in event_types
       assert :response_received in event_types
     end
+
+    test "returns error when both on_chunk and to are given", %{store: store, conv_id: conv_id} do
+      assert {:error, :conflicting_streaming_options} =
+               Store.converse(conv_id, "Hello",
+                 provider: :test,
+                 model: "test-model",
+                 api_key: "test-key",
+                 store: store,
+                 on_chunk: fn _chunk -> :ok end,
+                 to: self()
+               )
+    end
   end
 
   describe "track/1" do

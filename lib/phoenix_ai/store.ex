@@ -596,7 +596,11 @@ defmodule PhoenixAI.Store do
         user_id: Keyword.get(opts, :user_id),
         extract_facts:
           Keyword.get(opts, :extract_facts, converse_defaults[:extract_facts] || false),
-        store: Keyword.get(opts, :store, :phoenix_ai_store_default)
+        store: Keyword.get(opts, :store, :phoenix_ai_store_default),
+        on_chunk: Keyword.get(opts, :on_chunk),
+        to: Keyword.get(opts, :to),
+        streaming:
+          not is_nil(Keyword.get(opts, :on_chunk)) or not is_nil(Keyword.get(opts, :to))
       }
 
       result = ConversePipeline.run(conversation_id, message, context)
