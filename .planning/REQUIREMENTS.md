@@ -45,22 +45,22 @@ Requirements for Dashboard Queries milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| COST-01 | TBD | Pending |
-| COST-02 | TBD | Pending |
-| COST-03 | TBD | Pending |
-| COST-04 | TBD | Pending |
-| ADPT-01 | TBD | Pending |
-| ADPT-02 | TBD | Pending |
-| ADPT-03 | TBD | Pending |
-| ADPT-04 | TBD | Pending |
-| MIGR-01 | TBD | Pending |
-| MIGR-02 | TBD | Pending |
+| COST-01 | Phase 11 | Pending |
+| COST-02 | Phase 11 | Pending |
+| COST-03 | Phase 11 | Pending |
+| COST-04 | Phase 11 | Pending |
+| ADPT-01 | Phase 11 | Pending |
+| ADPT-02 | Phase 11 | Pending |
+| ADPT-03 | Phase 11 | Pending |
+| ADPT-04 | Phase 11 | Pending |
+| MIGR-01 | Phase 12 | Pending |
+| MIGR-02 | Phase 12 | Pending |
 
 **Coverage:**
 - v0.3.0 requirements: 10 total
-- Mapped to phases: 0
-- Unmapped: 10 ⚠️
+- Mapped to phases: 10
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-06*
-*Last updated: 2026-04-06 after initial definition*
+*Last updated: 2026-04-06 after roadmap creation*
