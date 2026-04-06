@@ -169,6 +169,32 @@ defmodule PhoenixAI.Store.ConverseIntegrationTest do
       # Final chunk with finish_reason
       assert_received {:test_chunk, %PhoenixAI.StreamChunk{finish_reason: "stop"}}
     end
+
+    test "sends chunks to PID via :to option", %{store: store, conv_id: conv_id} do
+      set_responses([
+        {:ok,
+         %PhoenixAI.Response{
+           content: "Ok",
+           usage: %PhoenixAI.Usage{input_tokens: 5, output_tokens: 2, total_tokens: 7}
+         }}
+      ])
+
+      {:ok, response} =
+        Store.converse(conv_id, "Hello",
+          provider: :test,
+          model: "test-model",
+          api_key: "test-key",
+          store: store,
+          to: self()
+        )
+
+      assert response.content == "Ok"
+
+      # AI.stream/2 with :to wraps chunks in {:phoenix_ai, {:chunk, chunk}}
+      assert_received {:phoenix_ai, {:chunk, %PhoenixAI.StreamChunk{delta: "O"}}}
+      assert_received {:phoenix_ai, {:chunk, %PhoenixAI.StreamChunk{delta: "k"}}}
+      assert_received {:phoenix_ai, {:chunk, %PhoenixAI.StreamChunk{finish_reason: "stop"}}}
+    end
   end
 
   describe "track/1" do
