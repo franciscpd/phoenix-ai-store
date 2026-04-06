@@ -8,22 +8,37 @@ A companion Elixir library for [PhoenixAI](https://hex.pm/packages/phoenix_ai) t
 
 Conversations persist and restore transparently across process restarts, with memory strategies keeping them within context window limits — the foundation everything else builds on.
 
+## Current Milestone: v0.2.0 Streaming Support
+
+**Goal:** Add streaming callback support to `converse/3` so consumers can receive AI response tokens in real-time via `on_chunk` or `to` PID options.
+
+**Target features:**
+- `on_chunk` callback option in `converse/3`
+- `to` PID option in `converse/3`
+- Conditional routing in `call_ai/2` (stream vs chat)
+- Backward compatibility (no streaming opts = identical behavior)
+- Tests and documentation for both streaming modes
+
 ## Requirements
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Conversation persistence with pluggable storage backends (Ecto + InMemory adapters) — v0.1.0
+- ✓ Memory management strategies (sliding window, token-aware truncation, summarization, pinned messages) — v0.1.0
+- ✓ Guardrails enforcement (token/cost budgets, tool policies, content filtering, rate limiting) — v0.1.0
+- ✓ Cost tracking and reporting across providers and models — v0.1.0
+- ✓ Immutable event log for compliance and debugging (append-only audit trail) — v0.1.0
+- ✓ Mix task for Ecto migration generation (Oban-style `mix phoenix_ai_store.gen.migration`) — v0.1.0
+- ✓ Telemetry handler as automatic alternative to explicit API for event capture — v0.1.0
+- ✓ Store-owned Conversation struct with persistence-specific fields (user_id, timestamps, metadata) — v0.1.0
 
 ### Active
 
-- [ ] Conversation persistence with pluggable storage backends (Ecto + InMemory adapters)
-- [ ] Memory management strategies (sliding window, token-aware truncation, summarization, pinned messages)
-- [ ] Guardrails enforcement (token/cost budgets, tool policies, content filtering, rate limiting)
-- [ ] Cost tracking and reporting across providers and models
-- [ ] Immutable event log for compliance and debugging (append-only audit trail)
-- [ ] Mix task for Ecto migration generation (Oban-style `mix phoenix_ai_store.gen.migration`)
-- [ ] Telemetry handler as automatic alternative to explicit API for event capture
-- [ ] Store-owned Conversation struct with persistence-specific fields (user_id, timestamps, metadata)
+- [ ] `on_chunk` callback option in `converse/3` — dispatch `%StreamChunk{}` to a function during streaming
+- [ ] `to` PID option in `converse/3` — send `{:phoenix_ai, {:chunk, chunk}}` messages to a process
+- [ ] Conditional routing in `call_ai/2` — `AI.stream/2` when streaming opts present, `AI.chat/2` otherwise
+- [ ] Backward compatibility — no streaming opts = identical behavior to v0.1.0
+- [ ] Tests and documentation for both streaming modes
 
 ### Out of Scope
 
@@ -85,4 +100,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-03 after initialization*
+*Last updated: 2026-04-05 after milestone v0.2.0 start*
