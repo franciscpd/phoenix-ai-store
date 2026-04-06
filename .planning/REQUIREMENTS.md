@@ -1,0 +1,66 @@
+# Requirements: PhoenixAI Store
+
+**Defined:** 2026-04-06
+**Core Value:** Conversations persist and restore transparently across process restarts, with memory strategies keeping them within context window limits
+
+## v0.3.0 Requirements
+
+Requirements for Dashboard Queries milestone. Each maps to roadmap phases.
+
+### Cost Query API
+
+- [ ] **COST-01**: User can query cost records with optional filters (user_id, conversation_id, provider, model, after, before) without requiring a conversation_id
+- [ ] **COST-02**: User can paginate cost records using cursor-based pagination matching the list_events pattern
+- [ ] **COST-03**: User can count cost records matching filters without loading full records
+- [ ] **COST-04**: CostStore behaviour callback signature updated from get_cost_records(conversation_id, opts) to list_cost_records(filters, opts)
+
+### Adapter Implementation
+
+- [ ] **ADPT-01**: Ecto adapter implements list_cost_records with dynamic Ecto query composition and keyset cursor pagination
+- [ ] **ADPT-02**: ETS adapter implements list_cost_records with filter matching and drop-while cursor pagination
+- [ ] **ADPT-03**: Ecto adapter implements count_cost_records with COUNT aggregate query
+- [ ] **ADPT-04**: ETS adapter implements count_cost_records with filtered enumeration
+
+### Migration & Compatibility
+
+- [ ] **MIGR-01**: Migration generator includes composite (recorded_at, id) index on cost_records table
+- [ ] **MIGR-02**: Contract tests updated for new CostStore callback signatures and pagination
+
+## Future Requirements
+
+### Cost Aggregation
+
+- **COSTAGG-01**: User can group cost sums by field (model, provider, user_id) in a single query (sum_cost_by/3)
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Events API changes | list_events/count_events already sufficient for dashboard use |
+| Offset-based pagination | Cursor-based is the established pattern; offset is anti-pattern for large datasets |
+| Flop/Paginator library | Existing in-house cursor implementation is sufficient; no external deps needed |
+| Deprecation shim for old API | Clean break preferred at 0.x — no backward compat wrapper |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| COST-01 | TBD | Pending |
+| COST-02 | TBD | Pending |
+| COST-03 | TBD | Pending |
+| COST-04 | TBD | Pending |
+| ADPT-01 | TBD | Pending |
+| ADPT-02 | TBD | Pending |
+| ADPT-03 | TBD | Pending |
+| ADPT-04 | TBD | Pending |
+| MIGR-01 | TBD | Pending |
+| MIGR-02 | TBD | Pending |
+
+**Coverage:**
+- v0.3.0 requirements: 10 total
+- Mapped to phases: 0
+- Unmapped: 10 ⚠️
+
+---
+*Requirements defined: 2026-04-06*
+*Last updated: 2026-04-06 after initial definition*
