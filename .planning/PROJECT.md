@@ -8,17 +8,6 @@ A companion Elixir library for [PhoenixAI](https://hex.pm/packages/phoenix_ai) t
 
 Conversations persist and restore transparently across process restarts, with memory strategies keeping them within context window limits — the foundation everything else builds on.
 
-## Current Milestone: v0.2.0 Streaming Support
-
-**Goal:** Add streaming callback support to `converse/3` so consumers can receive AI response tokens in real-time via `on_chunk` or `to` PID options.
-
-**Target features:**
-- `on_chunk` callback option in `converse/3`
-- `to` PID option in `converse/3`
-- Conditional routing in `call_ai/2` (stream vs chat)
-- Backward compatibility (no streaming opts = identical behavior)
-- Tests and documentation for both streaming modes
-
 ## Requirements
 
 ### Validated
@@ -31,14 +20,12 @@ Conversations persist and restore transparently across process restarts, with me
 - ✓ Mix task for Ecto migration generation (Oban-style `mix phoenix_ai_store.gen.migration`) — v0.1.0
 - ✓ Telemetry handler as automatic alternative to explicit API for event capture — v0.1.0
 - ✓ Store-owned Conversation struct with persistence-specific fields (user_id, timestamps, metadata) — v0.1.0
+- ✓ Streaming support in `converse/3` via `on_chunk` callback and `to` PID options — v0.2.0
+- ✓ Streaming observability — telemetry span and event log metadata capture streaming mode — v0.2.0
 
 ### Active
 
-- [ ] `on_chunk` callback option in `converse/3` — dispatch `%StreamChunk{}` to a function during streaming
-- [ ] `to` PID option in `converse/3` — send `{:phoenix_ai, {:chunk, chunk}}` messages to a process
-- [ ] Conditional routing in `call_ai/2` — `AI.stream/2` when streaming opts present, `AI.chat/2` otherwise
-- [ ] Backward compatibility — no streaming opts = identical behavior to v0.1.0
-- [ ] Tests and documentation for both streaming modes
+(None yet — planning next milestone)
 
 ### Out of Scope
 
@@ -75,12 +62,15 @@ Conversations persist and restore transparently across process restarts, with me
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Store defines its own Conversation struct | PhoenixAI's Conversation is a stub; Store needs persistence fields (user_id, timestamps, etc.) | — Pending |
-| Ecto as optional dependency (Oban pattern) | InMemory adapter for dev/test doesn't need Ecto; keeps the library lightweight for simple use cases | — Pending |
-| PhoenixAI normalizes Usage data (new release) | Cleaner architecture — normalization belongs at the source, not in every consumer | — Pending |
-| Agent integration via manage_history: false | Already works without any changes to PhoenixAI Agent — maximum decoupling | — Pending |
-| Explicit API + telemetry handler for event capture | API for control, telemetry for convenience — user chooses their integration style | — Pending |
-| Mix task for migrations (Oban style) | User controls migration timing and can review generated SQL before running | — Pending |
+| Store defines its own Conversation struct | PhoenixAI's Conversation is a stub; Store needs persistence fields (user_id, timestamps, etc.) | ✓ Good |
+| Ecto as optional dependency (Oban pattern) | InMemory adapter for dev/test doesn't need Ecto; keeps the library lightweight for simple use cases | ✓ Good |
+| PhoenixAI normalizes Usage data (new release) | Cleaner architecture — normalization belongs at the source, not in every consumer | ✓ Good |
+| Agent integration via manage_history: false | Already works without any changes to PhoenixAI Agent — maximum decoupling | ✓ Good |
+| Explicit API + telemetry handler for event capture | API for control, telemetry for convenience — user chooses their integration style | ✓ Good |
+| Mix task for migrations (Oban style) | User controls migration timing and can review generated SQL before running | ✓ Good |
+| Streaming via guard clauses, not NimbleOptions | converse/3 uses Keyword.get — consistency with existing pattern; NimbleOptions migration deferred | ✓ Good |
+| Conflict error for on_chunk + to | Explicit {:error, :conflicting_streaming_options} instead of silent precedence | ✓ Good |
+| TestProvider for streaming tests, not Mox | TestProvider.stream/3 already exists; consistent with existing converse test infrastructure | ✓ Good |
 
 ## Evolution
 
@@ -100,4 +90,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-05 after milestone v0.2.0 start*
+*Last updated: 2026-04-06 after v0.2.0 milestone*

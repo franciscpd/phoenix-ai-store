@@ -1,5 +1,35 @@
 # Milestones
 
+## v0.2.0 — Streaming Support
+
+**Shipped:** 2026-04-06
+**Phases:** 1 | **Commits:** 15 | **Tests:** 383
+**Lib:** 5,400 LOC | **Tests:** 4,831 LOC
+
+### Delivered
+
+Streaming callback support for `converse/3` — consumers can receive AI response tokens in real-time via `on_chunk` callback or `to` PID options, with zero breaking changes.
+
+### Key Accomplishments
+
+1. `on_chunk` callback streaming — dispatch `%StreamChunk{}` to a function during AI generation
+2. `to` PID streaming — send `{:phoenix_ai, {:chunk, chunk}}` messages for LiveView integration
+3. Conflict validation — `{:error, :conflicting_streaming_options}` when both modes passed
+4. Telemetry observability — `streaming: true/false` in span metadata for monitoring
+5. Event log audit trail — streaming mode captured in `:response_received` event data
+
+### Requirements
+
+12/12 v0.2.0 requirements satisfied (STRM×4, COMPAT×2, OBS×2, DOCS×4)
+
+### Archive
+
+- [Roadmap](milestones/v0.2.0-ROADMAP.md)
+- [Requirements](milestones/v0.2.0-REQUIREMENTS.md)
+- [Audit](milestones/v0.2.0-MILESTONE-AUDIT.md)
+
+---
+
 ## v0.1.0 — Initial Release
 
 **Shipped:** 2026-04-05
