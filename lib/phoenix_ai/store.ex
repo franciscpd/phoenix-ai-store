@@ -574,6 +574,41 @@ defmodule PhoenixAI.Store do
     * `:guardrails` — list of guardrail policy entries
     * `:user_id` — user identifier
     * `:extract_facts` — whether to auto-extract LTM facts (default from config)
+    * `:on_chunk` — callback function receiving `%PhoenixAI.StreamChunk{}` structs during
+      streaming. When provided, routes to `AI.stream/2` instead of `AI.chat/2`.
+      Mutually exclusive with `:to`.
+    * `:to` — PID to receive `{:phoenix_ai, {:chunk, %StreamChunk{}}}` messages during
+      streaming. When provided, routes to `AI.stream/2` instead of `AI.chat/2`.
+      Mutually exclusive with `:on_chunk`.
+
+  ## Streaming
+
+  Pass `:on_chunk` or `:to` to receive tokens in real-time. The full pipeline
+  (load, save, memory, guardrails, cost tracking, event log) runs identically —
+  only the AI call step changes from `AI.chat/2` to `AI.stream/2`.
+
+  Returns `{:ok, %Response{}}` after the stream completes, same as non-streaming.
+
+  ### Examples
+
+      # Callback-based streaming
+      PhoenixAI.Store.converse(conv_id, "Hello",
+        store: :my_store,
+        provider: :openai,
+        model: "gpt-4o",
+        on_chunk: fn %PhoenixAI.StreamChunk{delta: text} ->
+          send(my_liveview, {:ai_chunk, text})
+        end
+      )
+
+      # PID-based streaming (e.g., from a LiveView)
+      PhoenixAI.Store.converse(conv_id, "Hello",
+        store: :my_store,
+        provider: :openai,
+        model: "gpt-4o",
+        to: self()
+      )
+      # Caller receives {:phoenix_ai, {:chunk, %StreamChunk{}}} messages
   """
   @spec converse(String.t(), String.t(), keyword()) ::
           {:ok, PhoenixAI.Response.t()} | {:error, term()}
@@ -599,8 +634,7 @@ defmodule PhoenixAI.Store do
         store: Keyword.get(opts, :store, :phoenix_ai_store_default),
         on_chunk: Keyword.get(opts, :on_chunk),
         to: Keyword.get(opts, :to),
-        streaming:
-          not is_nil(Keyword.get(opts, :on_chunk)) or not is_nil(Keyword.get(opts, :to))
+        streaming: not is_nil(Keyword.get(opts, :on_chunk)) or not is_nil(Keyword.get(opts, :to))
       }
 
       result = ConversePipeline.run(conversation_id, message, context)
