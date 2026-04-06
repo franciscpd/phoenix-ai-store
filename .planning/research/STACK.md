@@ -1,202 +1,155 @@
-# Stack Research
+# Technology Stack
 
-**Domain:** AI conversation persistence & governance (Elixir hex library)
-**Researched:** 2026-04-03
-**Confidence:** HIGH (all versions verified against Hex.pm; patterns verified against official Elixir docs and production libraries)
-
----
-
-## Recommended Stack
-
-### Core Technologies
-
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| Elixir | >= 1.15 | Language runtime | Matches PhoenixAI constraint; Elixir 1.17+ brings gradual set-theoretic types that improve typespec accuracy but 1.15 is the floor to match the peer dep |
-| OTP | >= 26 | Supervision, ETS, GenServer | Matches PhoenixAI constraint; OTP 26 brings improved process labels and ETS performance improvements |
-| `phoenix_ai` | ~> 0.1 | Peer dependency — AI runtime layer | The library this Store wraps. Provides `Agent`, `Message`, `Response`, structs and telemetry events. Reference as peer dep (not hard dep) so the Store does not force a PhoenixAI version on apps |
-| `ecto` | ~> 3.13 | Optional peer dep — Ecto adapter only | Use `optional: true` in mix.exs. Not required for InMemory adapter. Latest stable is 3.13.5 (Nov 2025). Do NOT pull as a required dep — zero-dep promise for non-Ecto users |
-| `ecto_sql` | ~> 3.13 | SQL migrations and query helpers | Required only by Ecto adapter. 3.13.5 (Mar 2026). Also `optional: true` |
-| `nimble_options` | ~> 1.1 | Config schema validation and documentation | Already used by PhoenixAI (1.1.1 on Hex). Use `NimbleOptions.new!/1` at compile time in adapter `__using__` macros to validate config once, not on every call |
-| `telemetry` | ~> 1.3 | Instrumentation — emit span events | Already a PhoenixAI dep (1.4.1 on Hex). Every Store operation should emit `[:phoenix_ai_store, :action, :start/stop/exception]` spans via `telemetry:span/3`. Attach-based handler is the automatic integration mode |
-
-### Storage Adapters
-
-| Adapter | Dependencies | Backend | Use When |
-|---------|-------------|---------|----------|
-| `PhoenixAIStore.Adapters.ETS` | None (stdlib) | ETS table in a supervised GenServer | Dev, test, and production workloads that do not need durability across node restarts |
-| `PhoenixAIStore.Adapters.Ecto` | `ecto ~> 3.13`, `ecto_sql ~> 3.13`, + a DB driver | Postgres or SQLite3 | Production with persistence requirements; supports pagination, user scoping, cost reporting |
-
-### Supporting Libraries
-
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| `postgrex` | ~> 0.22 | PostgreSQL wire driver | Ecto adapter on Postgres. Declare `optional: true` in mix.exs — user brings their own DB driver |
-| `ecto_sqlite3` | ~> 0.22 | SQLite3 Ecto adapter | Ecto adapter on SQLite3 (testing, edge deployments). `optional: true`. Requires C compilation; warn users |
-| `telemetry_metrics` | ~> 1.1 | Metrics aggregation over telemetry events | Include only in `dev/test` deps. Apps that want dashboards will add it themselves |
-| `hammer` | ~> 7.3 | Rate limiting — token and request budgets | Guardrails rate-limiting feature. ETS backend is built-in (no extra dep). Declare `optional: true`; only needed if user enables rate-limiting guardrail |
-| `tiktoken` | ~> 0.4 | Accurate BPE token counting (Rust NIF) | Token-aware memory truncation when precision matters. `optional: true` — heavyweight (requires Rust); fall back to heuristic (`chars / 4`) when absent |
-
-### Development & Test Tools
-
-| Tool | Version | Purpose | Notes |
-|------|---------|---------|-------|
-| `ex_doc` | ~> 0.40 | Documentation generation | `only: :dev`. Run `mix docs` as part of CI. Include `@moduledoc` and `@doc` for all public callbacks |
-| `mox` | ~> 1.2 | Behaviour-based mocking in tests | `only: :test`. Define mock modules for `Store`, `MemoryStrategy`, `Policy` behaviours. Do not use for testing adapters — use InMemory adapter instead |
-| `stream_data` | ~> 1.3 | Property-based testing | `only: [:dev, :test]`. Useful for guardrail boundary tests and token budget arithmetic |
-| `credo` | ~> 1.7 | Static code analysis / style | `only: [:dev, :test], runtime: false`. Enforce consistency across adapter implementations |
-| `dialyxir` | ~> 1.4 | Dialyzer type checking | `only: [:dev, :test], runtime: false`. Every public callback must have `@spec`. Run `mix dialyzer` in CI |
-| `mimic` | ~> 2.3 | Function-level mocking | `only: :test`. Fallback if Mox behaviour contracts are not feasible for a particular test scenario; prefer Mox |
+**Project:** PhoenixAI Store — v0.3.0 Dashboard Queries
+**Researched:** 2026-04-06
+**Scope:** Additions and changes needed for filter-based cost record querying with cursor pagination. Does not re-cover the full v0.1.0/v0.2.0 stack — see prior STACK.md entries in git history for that baseline.
 
 ---
 
-## Installation (mix.exs deps)
+## No New Dependencies Required
+
+The v0.3.0 milestone requires **zero new library additions**. Every capability needed is already present:
+
+| Capability | Already Available Via |
+|------------|----------------------|
+| Ecto query composition with dynamic filters | `ecto ~> 3.13` (already in mix.exs as optional dep) |
+| Cursor-based pagination | Hand-rolled pattern already used in `list_events/2` — replicate it |
+| ETS scan + filter | OTP stdlib `:ets` — already used in `Adapters.ETS` |
+| Decimal arithmetic for cost aggregation | `decimal ~> 2.0` (already a hard dep in mix.exs) |
+
+No new `mix.exs` entries are needed.
+
+---
+
+## What Changes (Behaviour + Adapter Signatures)
+
+### CostStore Behaviour — Breaking Change
+
+Current `get_cost_records/2` signature in `PhoenixAI.Store.Adapter.CostStore`:
 
 ```elixir
-defp deps do
-  [
-    # Required — peer dep on AI runtime
-    {:phoenix_ai, "~> 0.1"},
+@callback get_cost_records(conversation_id :: String.t(), keyword()) ::
+            {:ok, [CostRecord.t()]} | {:error, term()}
+```
 
-    # Required — config validation and observability
-    {:nimble_options, "~> 1.1"},
-    {:telemetry, "~> 1.3"},
+New unified signature (mirrors `list_events/2` and `list_conversations/2`):
 
-    # Optional — only when Ecto adapter is used
-    {:ecto, "~> 3.13", optional: true},
-    {:ecto_sql, "~> 3.13", optional: true},
+```elixir
+@callback list_cost_records(filters :: keyword(), keyword()) ::
+            {:ok, %{records: [CostRecord.t()], next_cursor: String.t() | nil}}
+```
 
-    # Optional — DB drivers (user provides their own, but declare for compile checks)
-    {:postgrex, "~> 0.22", optional: true},
-    {:ecto_sqlite3, "~> 0.22", optional: true},
+Rationale: `conversation_id` becomes an optional filter (`:conversation_id` key), not a required positional argument. This is a deliberate breaking change to `CostStore` — the behaviour callback count changes. Both adapters must be updated together.
 
-    # Optional — rate limiting guardrail
-    {:hammer, "~> 7.3", optional: true},
+### Return Shape
 
-    # Optional — precise token counting (requires Rust)
-    {:tiktoken, "~> 0.4", optional: true},
+Adopt the same `%{records: [...], next_cursor: cursor_or_nil}` map shape used by `list_events/2`. Symmetric API across event and cost queries reduces cognitive overhead for callers.
 
-    # Dev / docs
-    {:ex_doc, "~> 0.40", only: :dev, runtime: false},
+---
 
-    # Dev / test
-    {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-    {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-    {:mox, "~> 1.2", only: :test},
-    {:stream_data, "~> 1.3", only: [:dev, :test]},
-    {:mimic, "~> 2.3", only: :test},
-  ]
+## Ecto Query Composition Pattern (No New Library)
+
+The existing `apply_cost_filters/2` and `apply_event_filters/2` in `Adapters.Ecto` already establish the pattern. Extend it with cursor support following the exact approach in `list_events/2`:
+
+**Cursor encoding — reuse the existing event cursor approach:**
+
+```elixir
+# Encode: Base64URL of "iso8601_datetime|uuid"
+defp encode_cost_cursor(%CostRecord{} = record) do
+  Base.url_encode64("#{DateTime.to_iso8601(record.recorded_at)}|#{record.id}", padding: false)
+end
+
+# Ecto where clause — same composite inequality used for events
+defp maybe_apply_cursor(query, nil), do: query
+defp maybe_apply_cursor(query, cursor) do
+  {cursor_ts, cursor_id} = decode_cost_cursor(cursor)
+  where(query, [cr], cr.recorded_at > ^cursor_ts or
+    (cr.recorded_at == ^cursor_ts and cr.id > ^cursor_id))
 end
 ```
 
-**CI validation for optional deps.** Add this to the CI matrix to confirm the library compiles without optional deps present:
+The ordering column for cost records is `recorded_at` (not `inserted_at` as used for events). The composite `(recorded_at, id)` cursor is stable because `id` is a UUID7 (monotonic within the same microsecond).
 
-```bash
-mix compile --no-optional-deps --warnings-as-errors
-```
-
----
-
-## Alternatives Considered
-
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| Config validation | `nimble_options` | Raw keyword validation | No documentation generation; PhoenixAI already uses NimbleOptions — consistency matters |
-| Rate limiting | `hammer` | `ex_rated` | Hammer 7.x has a cleaner API, pluggable backends, and is actively maintained (7.3.0, Feb 2026); ExRated is stale |
-| Token counting | `tiktoken` + heuristic fallback | Bumblebee tokenizers | Bumblebee pulls Nx/EXLA — enormous transitive dep for a utility function; tiktoken is purpose-built and optional |
-| Token counting fallback | `chars / 4` heuristic | `gpt3_tokenizer` | gpt3_tokenizer last updated 2022, unmaintained; `chars / 4` is +/-15% accuracy for English text, sufficient for truncation decisions |
-| Mocking in tests | `mox` | `mimic` | Mox enforces behaviour contracts at mock-definition time — critical for ensuring Store adapters stay in sync with their callbacks; keep Mimic as fallback only |
-| Append-only event log | Custom Ecto schema with `insert_only` guards | `carbonite`, `ecto_trail` | Carbonite uses Postgres triggers (too heavy, not portable); ecto_trail logs changesets (wrong model for event sourcing). A simple `events` table with no update/delete in the repo is sufficient |
-| In-memory storage | Stdlib `:ets` directly | `stash`, `elixir_cache` | Both add a dependency for wrapping what is ~30 lines of ETS boilerplate. Own the InMemory adapter entirely |
-| Static analysis | `dialyxir` | Elixir 1.17+ built-in type inference | Built-in inference is additive, not a replacement for Dialyzer PLT analysis. Use both |
-
----
-
-## What NOT to Use
-
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| `agent_session_manager` | Designed for CLI agent orchestration (Claude Code, Codex); session/run/event model does not map to API-based chat completions; 16 transitive deps as of v0.9.0 | This library (phoenix_ai_store) IS the alternative |
-| Hard `ecto` dep in root mix.exs | Forces Ecto on users who only want InMemory adapter — violates the zero-dep promise | `optional: true`; gate all Ecto code behind `Code.ensure_loaded?(Ecto)` checks at runtime and the adapter's `start_link/1` documentation |
-| `GenStage` / `Broadway` for event pipeline | Overkill for an audit log; adds concurrency complexity and a non-trivial dependency | Synchronous Ecto `insert` in the `log_event` call path; async only if user explicitly configures a background telemetry handler |
-| `EventStoreDB` / `Spear` | Correct tool for event sourcing systems at scale; wrong fit for a companion library that must work in any Phoenix app | Ecto append-only `events` table covers 99% of audit needs |
-| `Jason` as explicit dep | Already pulled transitively by PhoenixAI; declaring it explicitly risks version conflicts | Use `Jason` if available but do not force it; metadata fields use native Elixir terms internally, serialized only at the storage boundary by the adapter |
-| `telemetry_poller` as required dep | Only needed if the app wants periodic VM metric polling — not a Store concern | Document in guide; let app owners add it |
-| Any OpenAI/Anthropic client library | The Store is provider-agnostic; it tracks cost via normalized `Usage` structs from PhoenixAI, not raw API responses | Rely entirely on PhoenixAI for provider communication |
-
----
-
-## Key Design Patterns
-
-### Optional Ecto — The Oban Pattern (adapted)
-
-Oban requires `ecto_sql` as a hard dep because its core job queue IS the database. This Store differs: the InMemory adapter has zero DB deps. Declare Ecto as `optional: true` and guard Ecto-only modules:
+**ETS cursor — same drop-while pattern used in `Adapters.ETS.list_events/2`:**
 
 ```elixir
-# In PhoenixAIStore.Adapters.Ecto — gated at compile time
-if Code.ensure_loaded?(Ecto) do
-  @behaviour PhoenixAIStore.Store
-  # ... schema definitions
+defp maybe_apply_cursor(records, nil), do: records
+defp maybe_apply_cursor(records, cursor) do
+  {cursor_ts, cursor_id} = decode_cost_cursor(cursor)
+  Enum.drop_while(records, fn record ->
+    case DateTime.compare(record.recorded_at, cursor_ts) do
+      :lt -> true
+      :gt -> false
+      :eq -> record.id <= cursor_id
+    end
+  end)
 end
 ```
 
-The Mix task (`mix phoenix_ai_store.gen.migration`) should check at runtime and fail fast with a clear error if Ecto is not present.
+**ETS key structure — requires change.** Current ETS key is `{:cost_record, conversation_id, record_id}`. This makes global queries (no conversation_id filter) require a full `match_object` scan with `:_` in the conversation_id position — which already works. No key structure change is needed; the existing wildcard pattern `{{:cost_record, :_, :_}, :_}` already enables global scans and `sum_cost/2` uses it. Keep the key unchanged.
 
-### NimbleOptions Schema at Module Load Time
+---
 
-Pre-validate schemas once during module initialization, not on every call:
+## Dynamic Filter Support for Cost Records
 
-```elixir
-@store_schema NimbleOptions.new!([
-  adapter: [type: :atom, required: true],
-  repo: [type: :atom, required: false],
-  ...
-])
+Filters to support in `list_cost_records/2` (Ecto adapter via `apply_cost_filters/2`, ETS adapter via `filter_cost_records/2`):
+
+| Filter Key | Ecto Clause | ETS Equivalent | Already in `sum_cost/2`? |
+|------------|-------------|----------------|--------------------------|
+| `:conversation_id` | `where cr.conversation_id == ^id` | `&1.conversation_id == id` | Yes |
+| `:user_id` | `where cr.user_id == ^uid` | `&1.user_id == uid` | Yes |
+| `:provider` | `where cr.provider == ^to_string(p)` | `&1.provider == p` | Yes |
+| `:model` | `where cr.model == ^m` | `&1.model == m` | Yes |
+| `:after` | `where cr.recorded_at >= ^dt` | `DateTime.compare >= :eq` | Yes |
+| `:before` | `where cr.recorded_at <= ^dt` | `DateTime.compare <= :eq` | Yes |
+| `:limit` | `limit(query, ^n)` | `Enum.take/2` | No — new |
+| `:cursor` | composite where clause | `Enum.drop_while/2` | No — new |
+
+All filter conditions except `:limit` and `:cursor` are already implemented in `apply_cost_filters/2` used by `sum_cost/2`. Reuse that function and add cursor/limit clauses on top.
+
+---
+
+## Index Recommendation (Postgres / Migration)
+
+The existing `cost_records` table is likely indexed on `conversation_id`. For global dashboard queries (no `conversation_id`), add a composite index on `(recorded_at, id)` to support cursor pagination without a sequential scan:
+
+```sql
+CREATE INDEX phoenix_ai_store_cost_records_cursor_idx
+  ON phoenix_ai_store_cost_records (recorded_at ASC, id ASC);
 ```
 
-This produces compile-time errors for invalid schemas and auto-generates documentation from the spec.
+Add this to the generated migration in `mix phoenix_ai_store.gen.migration`. This is a migration file change, not a dependency change. Confidence: HIGH — same rationale applies as the event log; without this index, cursor queries on large datasets degrade to seqscans.
 
-### Telemetry Span Convention
+---
 
-Every public Store operation emits three events following the BEAM telemetry convention:
+## What NOT to Add
 
-```
-[:phoenix_ai_store, :save_conversation, :start]
-[:phoenix_ai_store, :save_conversation, :stop]
-[:phoenix_ai_store, :save_conversation, :exception]
-```
+| Avoid | Why |
+|-------|-----|
+| `paginator` / `scrivener_ecto` / `quarto` | All three add external dependencies for what is 15 lines of hand-rolled cursor logic already established in the codebase. The custom cursor is opaque (no external contract to maintain) and implementation-portable (ETS + Ecto use the same encoding). |
+| `flop` | Powerful but heavyweight — it adds filter validation, sorting DSL, and Ecto fragment building. The Store's filter set is small and static. Bringing Flop would be over-engineering and would add a non-optional transitive dep. |
+| `ecto_cursor_based_pagination` | Only supports Ecto; the ETS adapter would need divergent logic anyway. The hand-rolled pattern keeps both adapters symmetric. |
+| Changing `conversation_id` to nullable in Ecto schema | `conversation_id` in `CostRecordSchema` is currently `@required_fields`. Making it optional in the changeset would allow nil values at write time, which is semantically wrong — cost records always belong to a conversation turn. The filter API makes `conversation_id` optional as a query filter, not as a record field. Leave the schema required field untouched. |
 
-Use `telemetry:span/3` (Erlang) or `:telemetry.span/3` (Elixir) to emit all three atomically. This is what the automatic telemetry handler subscribes to.
+---
 
-### Token Counting Strategy
+## Migration Scope
 
-Implement a two-tier approach for memory strategies:
+The DB schema itself does NOT change for v0.3.0. The `cost_records` table already has all the columns needed for the new filter queries. The only migration change is adding the `(recorded_at, id)` index described above.
 
-1. **Precise** (when `tiktoken` is loaded): `Tiktoken.count_tokens(text, model)` — accurate BPE count
-2. **Heuristic** (fallback): `div(byte_size(text), 4)` — ~15% error margin for English text, sufficient for truncation decisions
+---
 
-The memory strategy behaviour receives a `:token_counter` option that defaults to the detected available implementation.
+## Integration Points
+
+The `CostTracking` module (`lib/phoenix_ai/store/cost_tracking.ex`) calls `adapter.save_cost_record/2` — this is unaffected. The new `list_cost_records/2` callback is consumed directly by callers of the store facade (`PhoenixAI.Store`), not by `CostTracking`. The facade module needs a new `list_cost_records/2` public function that routes to the configured adapter.
 
 ---
 
 ## Sources
 
-- NimbleOptions v1.1.1: https://hex.pm/packages/nimble_options
-- Telemetry v1.4.1: https://hex.pm/packages/telemetry
-- Ecto v3.13.5 / ecto_sql v3.13.5: https://hex.pm/packages/ecto, https://hex.pm/packages/ecto_sql
-- PhoenixAI v0.1.0 deps: https://hex.pm/packages/phoenix_ai
-- PhoenixAI Agent docs (manage_history): https://hexdocs.pm/phoenix_ai/PhoenixAI.Agent.html
-- Postgrex v0.22.0: https://hex.pm/packages/postgrex
-- ecto_sqlite3 v0.22.0: https://hex.pm/packages/ecto_sqlite3
-- Hammer v7.3.0: https://hex.pm/packages/hammer
-- Tiktoken v0.4.2: https://hex.pm/packages/tiktoken
-- Mox v1.2.0: https://hex.pm/packages/mox
-- Mimic v2.3.0: https://hex.pm/packages/mimic
-- ExDoc v0.40.1: https://hex.pm/packages/ex_doc
-- StreamData v1.3.0: https://hex.pm/packages/stream_data
-- Credo v1.7.17: https://hex.pm/packages/credo
-- Dialyxir v1.4.7: https://hex.pm/packages/dialyxir
-- Elixir library guidelines (optional deps): https://hexdocs.pm/elixir/library-guidelines.html
-- Telemetry span conventions: https://hexdocs.pm/telemetry/telemetry.html
-- Elixir gradual types roadmap: https://elixir-lang.org/blog/2026/01/09/type-inference-of-all-and-next-15/
-- agent_session_manager v0.9.0 (evaluated and rejected): https://github.com/nshkrdotcom/agent_session_manager
+- Existing `Adapters.Ecto.list_events/2` implementation (cursor pattern baseline): `lib/phoenix_ai/store/adapters/ecto.ex:529-553`
+- Existing `Adapters.ETS.list_events/2` implementation (ETS cursor baseline): `lib/phoenix_ai/store/adapters/ets.ex:465-493`
+- Existing `apply_cost_filters/2` (filter reuse): `lib/phoenix_ai/store/adapters/ecto.ex:449-487`
+- Ecto query composition docs: https://hexdocs.pm/ecto/Ecto.Query.html
+- Elixir `Base.url_encode64/2`: https://hexdocs.pm/elixir/Base.html#url_encode64/2
+- UUID7 monotonic ordering: https://www.ietf.org/rfc/rfc9562.html#section-5.7 (basis for stable `(recorded_at, id)` cursor)

@@ -1,490 +1,349 @@
-# Architecture Research
+# Architecture Patterns
 
 **Domain:** AI conversation persistence & governance (Elixir library)
-**Researched:** 2026-04-03
-**Confidence:** HIGH (based on official Elixir/Oban/PhoenixAI docs, verified patterns)
+**Researched:** 2026-04-06
+**Milestone context:** v0.3.0 — Dashboard Queries
 
 ---
 
-## Standard Architecture
+## v0.3.0 Change Summary
 
-### System Overview
+This milestone is three precise surgical changes to an otherwise stable architecture:
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  User's Phoenix Application                                       │
-│    - calls PhoenixAIStore.converse/2 or manages flow manually     │
-│    - OR attaches PhoenixAIStore.TelemetryHandler to auto-capture  │
-└───────────────────────┬──────────────────────────────────────────┘
-                        │ explicit API  OR  telemetry attach
-┌───────────────────────▼──────────────────────────────────────────┐
-│  PhoenixAIStore (library boundary)                                │
-│                                                                   │
-│  ┌─────────────┐   ┌────────────────┐   ┌──────────────────┐    │
-│  │  Store API  │   │  Memory Layer  │   │  Guardrails      │    │
-│  │  (public)   │──▶│  (strategies)  │──▶│  (policy stack)  │    │
-│  └──────┬──────┘   └────────────────┘   └────────┬─────────┘    │
-│         │                                         │              │
-│  ┌──────▼──────────────────────────────────────────▼──────────┐  │
-│  │  Storage Adapter (behaviour)                                │  │
-│  │  ┌─────────────────────┐   ┌──────────────────────────┐   │  │
-│  │  │  Ecto Adapter        │   │  InMemory Adapter (ETS)  │   │  │
-│  │  │  (optional dep)      │   │  (zero extra deps)       │   │  │
-│  │  └─────────────────────┘   └──────────────────────────┘   │  │
-│  └─────────────────────────────────────────────────────────────┘  │
-│                                                                   │
-│  ┌─────────────────┐   ┌──────────────┐   ┌──────────────────┐  │
-│  │  CostTracker    │   │  EventLog    │   │  Telemetry       │  │
-│  │  (per response) │   │  (append-    │   │  Handler         │  │
-│  │                 │   │   only log)  │   │  (auto-capture)  │  │
-│  └─────────────────┘   └──────────────┘   └──────────────────┘  │
-└───────────────────────┬──────────────────────────────────────────┘
-                        │
-┌───────────────────────▼──────────────────────────────────────────┐
-│  PhoenixAI (peer dep)                                             │
-│    Agent (manage_history: false) / AI.chat / Pipeline / Team      │
-│    Telemetry: [:phoenix_ai, :chat/:stream/:tool_call/...]         │
-└──────────────────────────────────────────────────────────────────┘
-```
+1. Replace `CostStore.get_cost_records(conversation_id, opts)` with `CostStore.list_cost_records(filters, opts)` — aligning the callback signature with the existing EventStore pattern and making conversation_id an optional filter rather than a required positional argument
+2. Add cursor-based pagination to `list_cost_records` in both adapters, using the identical cursor encoding already used by EventStore
+3. Update the `Store` facade to expose `list_cost_records/2` instead of `get_cost_records/2`
 
-### Component Responsibilities
-
-| Component | Module(s) | Responsibility | Talks To |
-|-----------|-----------|----------------|----------|
-| Store API | `PhoenixAIStore` | Public facade: `converse/2`, `load/1`, `save/1`, `history/1` | Memory, Guardrails, StorageAdapter, CostTracker, EventLog |
-| Conversation struct | `PhoenixAIStore.Conversation` | Canonical persistence struct (id, user_id, messages, metadata, timestamps) | StorageAdapter |
-| Storage behaviour | `PhoenixAIStore.Adapter` | `@behaviour` contract: `save/1`, `load/1`, `list/1`, `delete/1` | — |
-| Ecto adapter | `PhoenixAIStore.Adapters.Ecto` | Postgres/SQLite persistence via Ecto (optional dep) | Ecto.Repo |
-| InMemory adapter | `PhoenixAIStore.Adapters.InMemory` | ETS-backed; zero extra deps; GenServer owner | ETS table |
-| Memory strategies | `PhoenixAIStore.Memory.*` | Transform message list before passing to AI (sliding window, token truncation, summarization, pinning) | PhoenixAI.Message, PhoenixAI.AI.chat (summarization calls back into the AI) |
-| Strategy behaviour | `PhoenixAIStore.Memory.Strategy` | `@callback apply(messages, opts) :: messages` | — |
-| Guardrails | `PhoenixAIStore.Guardrails` | Run ordered policy stack; return `{:ok, :pass}` or `{:error, PolicyViolation.t()}` | CostTracker, StorageAdapter |
-| Policy behaviour | `PhoenixAIStore.Guardrails.Policy` | `@callback check(context) :: :ok \| {:error, reason}` | — |
-| Built-in policies | `PhoenixAIStore.Guardrails.Policies.*` | TokenBudget, CostBudget, ToolPolicy, ContentFilter, RateLimit | StorageAdapter (for aggregates), CostTracker |
-| CostTracker | `PhoenixAIStore.CostTracker` | Parse `Response.usage`, look up pricing table, compute cost, persist record | StorageAdapter (event log), Guardrails (budget check) |
-| EventLog | `PhoenixAIStore.EventLog` | Append-only Ecto schema inserts; cursor-based pagination; optional redaction | Ecto (optional dep) |
-| TelemetryHandler | `PhoenixAIStore.TelemetryHandler` | Attaches to `[:phoenix_ai, ...]` events; calls Store API automatically | Store API |
-| Config | `PhoenixAIStore.Config` | NimbleOptions schema validation; resolves adapter module at startup | All components |
-| Supervisor | `PhoenixAIStore.Supervisor` | Starts InMemory adapter (ETS owner GenServer) when selected; optional child | InMemory GenServer |
+No new modules. No new supervision tree components. No schema changes.
 
 ---
 
-## Recommended Project Structure
+## Existing Architecture (unchanged)
 
 ```
-lib/
-  phoenix_ai_store.ex                   # Public API + Application entry
-  phoenix_ai_store/
-    application.ex                      # Optional supervisor boot
-    config.ex                           # NimbleOptions validation
-    conversation.ex                     # Store-owned struct (id, user_id, messages, metadata)
-    adapter.ex                          # @behaviour: save/load/list/delete
-    adapters/
-      ecto.ex                           # Ecto adapter (Code.ensure_loaded? Ecto)
-      in_memory.ex                      # ETS adapter; GenServer owner
-      in_memory/
-        server.ex                       # GenServer managing ETS table lifecycle
-    schemas/                            # Ecto schemas (optional dep boundary)
-      conversation_schema.ex
-      message_schema.ex
-      event_log_schema.ex
-      cost_record_schema.ex
-    memory/
-      strategy.ex                       # @behaviour: apply(messages, opts) :: messages
-      sliding_window.ex
-      token_truncation.ex
-      summarization.ex
-      pinned.ex
-      pipeline.ex                       # Compose multiple strategies in order
-    guardrails.ex                       # Orchestrates policy stack
-    guardrails/
-      policy.ex                         # @behaviour: check(context) :: :ok | {:error, reason}
-      policy_violation.ex               # Struct with reason, policy, metadata
-      policies/
-        token_budget.ex
-        cost_budget.ex
-        tool_policy.ex
-        content_filter.ex
-        rate_limit.ex
-    cost_tracker.ex                     # Usage → cost calculation
-    cost_tracker/
-      pricing.ex                        # Model pricing tables (configurable)
-    event_log.ex                        # Public append API + query API
-    telemetry_handler.ex                # Attach to [:phoenix_ai, ...] events
-    migrations/                         # Migration templates (not auto-run)
-      conversation_migration.ex
-      event_log_migration.ex
-      cost_records_migration.ex
-
-mix/
-  tasks/
-    phoenix_ai_store.gen.migration.ex  # mix phoenix_ai_store.gen.migration
+PhoenixAI.Store.Adapter (base behaviour)
+  ├── .FactStore (optional sub-behaviour)
+  ├── .ProfileStore (optional sub-behaviour)
+  ├── .TokenUsage (optional sub-behaviour)
+  ├── .CostStore (optional sub-behaviour)     ← CHANGING
+  └── .EventStore (optional sub-behaviour)    ← reference / model pattern
 ```
+
+Adapters declare `@behaviour` for each sub-behaviour they implement. The `Store` facade checks `function_exported?(adapter, :callback, arity)` at call time — no compile-time coupling between the facade and optional sub-behaviours.
 
 ---
 
-## Architectural Patterns
+## Current vs Target CostStore Callback Contract
 
-### 1. Optional Ecto Dependency (Oban Pattern)
-
-Ecto is declared `optional: true` in `mix.exs`. Modules that depend on it are wrapped with a compile-time guard:
+### Current (to be removed)
 
 ```elixir
-# mix.exs
-defp deps do
-  [
-    {:phoenix_ai, "~> 0.1"},
-    {:ecto_sql, "~> 3.10", optional: true},
-    {:nimble_options, "~> 1.1"}
-  ]
+# lib/phoenix_ai/store/adapter.ex — CostStore (CURRENT)
+@callback get_cost_records(conversation_id :: String.t(), keyword()) ::
+            {:ok, [CostRecord.t()]} | {:error, term()}
+
+@callback sum_cost(filters :: keyword(), keyword()) ::
+            {:ok, Decimal.t()} | {:error, term()}
+```
+
+`get_cost_records/2` takes a required `conversation_id` as its first positional argument. This prevents global queries (no conversation scope) and prevents cursor pagination — there is no natural place for `:limit` or `:cursor` keys without putting them in the second `opts` argument, which breaks the `filters / opts` separation used everywhere else in the codebase.
+
+### Target (to be added)
+
+```elixir
+# lib/phoenix_ai/store/adapter.ex — CostStore (TARGET)
+@callback list_cost_records(filters :: keyword(), keyword()) ::
+            {:ok, %{records: [CostRecord.t()], next_cursor: String.t() | nil}}
+
+@callback sum_cost(filters :: keyword(), keyword()) ::
+            {:ok, Decimal.t()} | {:error, term()}
+```
+
+`conversation_id` becomes an optional filter key. The return shape matches `EventStore.list_events/2` exactly: a map with a `records` key and a `next_cursor` key. `sum_cost` is unchanged.
+
+---
+
+## Data Flow: Before and After
+
+### Before
+
+```
+Store.get_cost_records(conversation_id, opts)
+  → adapter.get_cost_records(conversation_id, adapter_opts)
+  → {:ok, [%CostRecord{}, ...]}
+```
+
+Caller must always supply `conversation_id`. No pagination. No global query.
+
+### After
+
+```
+Store.list_cost_records(filters, opts)
+  → adapter.list_cost_records(filters, adapter_opts)
+  → {:ok, %{records: [...], next_cursor: nil | cursor_string}}
+```
+
+Examples:
+
+```elixir
+# Conversation-scoped (equivalent to old get_cost_records)
+Store.list_cost_records([conversation_id: id], store: :my_store)
+
+# Global dashboard query — no conversation_id required
+Store.list_cost_records([user_id: id, after: dt, limit: 50], store: :my_store)
+Store.list_cost_records([provider: :openai, limit: 100], store: :my_store)
+
+# Paginated continuation
+Store.list_cost_records([limit: 50, cursor: prev_next_cursor], store: :my_store)
+```
+
+---
+
+## Component Boundaries
+
+| Component | What Changes |
+|-----------|-------------|
+| `Adapter.CostStore` (adapter.ex) | Remove `get_cost_records/2` callback; add `list_cost_records/2` callback |
+| `Adapters.Ecto` (adapters/ecto.ex) | Remove `get_cost_records/2` impl; add `list_cost_records/2` with cursor logic |
+| `Adapters.ETS` (adapters/ets.ex) | Remove `get_cost_records/2` impl; add `list_cost_records/2` with cursor logic |
+| `Store` (store.ex) | Remove `get_cost_records/2` facade function; add `list_cost_records/2` |
+| `CostStoreContractTest` (test/support/) | Replace `get_cost_records` tests with `list_cost_records` tests including cursor cases |
+
+Unchanged: `CostTracking` orchestrator, `CostRecord` struct, `Schemas.CostRecord`, `sum_cost`, `EventStore`, supervision tree.
+
+---
+
+## Cursor Encoding Pattern
+
+The cursor encoding is identical to EventStore. Copy, do not diverge:
+
+```elixir
+# Cursor encodes (recorded_at, id) as Base64URL without padding
+# Sort order is: [asc: recorded_at, asc: id]
+
+defp encode_cost_cursor(%CostRecord{recorded_at: ts, id: id}) do
+  Base.url_encode64("#{DateTime.to_iso8601(ts)}|#{id}", padding: false)
+end
+
+defp decode_cost_cursor(cursor) do
+  {:ok, decoded} = Base.url_decode64(cursor, padding: false)
+  [ts_str, id] = String.split(decoded, "|", parts: 2)
+  {:ok, ts, _} = DateTime.from_iso8601(ts_str)
+  {ts, id}
 end
 ```
 
+### Ecto cursor predicate
+
 ```elixir
-# lib/phoenix_ai_store/adapters/ecto.ex
-if Code.ensure_loaded?(Ecto) do
-  defmodule PhoenixAIStore.Adapters.Ecto do
-    @behaviour PhoenixAIStore.Adapter
-    # ... implementation
-  end
+# Keyset pagination — same predicate as maybe_apply_ecto_cursor/2 in EventStore
+defp maybe_apply_ecto_cost_cursor(query, nil), do: query
+
+defp maybe_apply_ecto_cost_cursor(query, cursor) do
+  {cursor_ts, cursor_id} = decode_cost_cursor(cursor)
+
+  where(
+    query,
+    [cr],
+    cr.recorded_at > ^cursor_ts or
+      (cr.recorded_at == ^cursor_ts and cr.id > ^cursor_id)
+  )
 end
 ```
 
-The InMemory adapter has zero deps and is always available. The Ecto adapter compiles only when Ecto is present. This ensures library users who only want in-memory (dev/test) do not install Ecto.
+### ETS cursor
 
-**Source confirmation:** This exact pattern is used by the Dataloader library and documented in the Elixir Forum thread on optional dependencies. The `optional: true` flag in mix.exs prevents the dep from being forced on downstream users; `Code.ensure_loaded?/1` gates compilation.
-
-### 2. Behaviour-Based Adapters
-
-Three parallel behaviour trees, each following the same contract pattern from Aaron Renner's Elixir Adapter Pattern (2023):
-
-```
-StorageAdapter (@behaviour PhoenixAIStore.Adapter)
-  └── Adapters.Ecto
-  └── Adapters.InMemory
-  └── User-supplied adapter
-
-MemoryStrategy (@behaviour PhoenixAIStore.Memory.Strategy)
-  └── Memory.SlidingWindow
-  └── Memory.TokenTruncation
-  └── Memory.Summarization
-  └── Memory.Pinned
-  └── Memory.Pipeline (meta-strategy: composes others)
-
-GuardrailPolicy (@behaviour PhoenixAIStore.Guardrails.Policy)
-  └── Policies.TokenBudget
-  └── Policies.CostBudget
-  └── Policies.ToolPolicy
-  └── Policies.ContentFilter
-  └── Policies.RateLimit
-  └── User-supplied policy
-```
-
-Each behaviour is a single `@callback` that accepts a typed struct and returns `{:ok, result} | {:error, term}`. User-supplied implementations are first-class: the config accepts any module implementing the behaviour.
-
-### 3. GenServer + ETS for InMemory Adapter
-
-The InMemory adapter uses a GenServer as the ETS owner process to prevent table loss on restart:
-
-```
-PhoenixAIStore.Supervisor
-  └── PhoenixAIStore.Adapters.InMemory.Server (GenServer)
-        └── owns :phoenix_ai_store_conversations (ETS :set, :named_table, :public)
-```
-
-Conversation data is stored in ETS keyed by conversation ID. The GenServer handles crash recovery (table re-creation on restart). This pattern provides:
-- Concurrent reads without bottleneck
-- GenServer holds write coordination if needed
-- Table survives individual caller crashes (owner is separate process)
-
-### 4. Telemetry Handler (Dual Integration Modes)
-
-Users choose one of two integration modes. Both are fully supported — they are not mutually exclusive and can coexist:
-
-**Mode A — Explicit API (recommended for full control):**
-```
-User code
-  → PhoenixAIStore.converse(conversation_id, prompt, opts)
-      → load conversation from store
-      → apply memory strategy
-      → run guardrails check
-      → call AI.Agent.prompt/2 with messages: [...]
-      → receive Response
-      → persist updated conversation
-      → record cost
-      → append to event log
-      → return response
-```
-
-**Mode B — Telemetry Handler (zero-code integration):**
-```
-PhoenixAIStore.TelemetryHandler.attach()
-  → listens to [:phoenix_ai, :chat, :stop]
-                [:phoenix_ai, :tool_call, :stop]
-                [:phoenix_ai, :stream, :stop]
-  → on event: extract conversation_id from metadata
-              → persist Response.usage → CostTracker
-              → append to EventLog
-              → optionally update conversation messages
-```
-
-Mode B is limited: it cannot intercept pre-call guardrails checks (those require the explicit API). The TelemetryHandler is best for retrofitting cost/event tracking onto existing PhoenixAI usage without restructuring code.
-
-### 5. NimbleOptions Configuration Schema
-
-All public APIs validate their options via NimbleOptions schemas defined at the module level. This provides:
-- Compile-time documentation generation
-- Runtime validation with clear error messages
-- Consistent `{:ok, validated_opts} | {:error, NimbleOptions.ValidationError.t()}` return shape
+ETS has no index-based seek. Sort all matching records first, then `Enum.drop_while/2`:
 
 ```elixir
-@store_opts_schema NimbleOptions.new!([
-  adapter: [type: :atom, required: true],
-  memory_strategy: [type: :atom, default: PhoenixAIStore.Memory.SlidingWindow],
-  policies: [type: {:list, :atom}, default: []],
-  ...
-])
+defp maybe_apply_cost_cursor(records, nil), do: records
+
+defp maybe_apply_cost_cursor(records, cursor) do
+  {cursor_ts, cursor_id} = decode_cost_cursor(cursor)
+
+  Enum.drop_while(records, fn record ->
+    case DateTime.compare(record.recorded_at, cursor_ts) do
+      :lt -> true
+      :gt -> false
+      :eq -> record.id <= cursor_id
+    end
+  end)
+end
 ```
 
-### 6. Append-Only Event Log
-
-The EventLog never modifies or deletes rows. It uses:
-- Auto-incrementing `id` + `inserted_at` for cursor-based pagination
-- `conversation_id` foreign key (indexed)
-- `event_type` enum column (indexed)
-- `payload` JSONB for event-specific data
-- `redacted_at` nullable timestamp (marks redaction without destroying record)
-
-Inserts are fire-and-forget (cast to the EventLog process or direct Repo.insert). Reads use cursor pagination: `WHERE id > :cursor ORDER BY id ASC LIMIT :page_size`.
-
-### 7. Cost Tracker — Pricing Table Pattern
-
-Model pricing is stored as a configurable map (not hardcoded), supporting runtime overrides:
-
-```elixir
-# Default pricing config (users override in application config)
-%{
-  {"openai", "gpt-4o"} => %{input: 2.50, output: 10.00},   # per 1M tokens
-  {"anthropic", "claude-3-5-sonnet"} => %{input: 3.00, output: 15.00},
-  ...
-}
-```
-
-CostTracker reads `Response.usage` (normalized by PhoenixAI), multiplies by pricing table entries, persists a `CostRecord` to Ecto (when adapter is Ecto), and emits `[:phoenix_ai_store, :cost, :recorded]` telemetry.
+This is O(n) but matches the existing ETS EventStore implementation. ETS is not durable production storage; O(n) is documented and expected.
 
 ---
 
-## Data Flow
+## Filter Keys for list_cost_records
 
-### Request Flow (Explicit API)
+Carry all filter keys from the existing `sum_cost` implementation in both adapters, plus the two pagination keys:
+
+| Filter key | Type | Notes |
+|------------|------|-------|
+| `:conversation_id` | `String.t()` | Optional — omit for global queries |
+| `:user_id` | `String.t()` | Filter by user |
+| `:provider` | `atom()` | e.g. `:openai`, `:anthropic` |
+| `:model` | `String.t()` | e.g. `"gpt-4o"` |
+| `:after` | `DateTime.t()` | Inclusive — `recorded_at >= dt` |
+| `:before` | `DateTime.t()` | Inclusive — `recorded_at <= dt` |
+| `:limit` | `pos_integer()` | Page size; `nil` means no limit |
+| `:cursor` | `String.t()` | Opaque cursor from previous page's `next_cursor` |
+
+The `apply_cost_filters/2` private function in both adapters already handles the first six keys. The `limit` and `cursor` keys are handled in the `list_cost_records/2` function body via dedicated private helpers, not inside `apply_cost_filters/2` — same separation as EventStore's `list_events/2`.
+
+---
+
+## Files That Need Changing
+
+### 1. `lib/phoenix_ai/store/adapter.ex`
+
+In the `defmodule CostStore` block:
+- Remove `@callback get_cost_records(conversation_id :: String.t(), keyword())` declaration
+- Add `@callback list_cost_records(filters :: keyword(), keyword()) :: {:ok, %{records: [CostRecord.t()], next_cursor: String.t() | nil}}`
+- Update `@moduledoc` to describe the filter-based API and pagination
+
+### 2. `lib/phoenix_ai/store/adapters/ecto.ex`
+
+- Remove `get_cost_records/2` function and its `@impl` annotation (lines 415–431)
+- Add `list_cost_records/2` implementation:
+  - Build base query: `from(cr in cost_record_source(opts), order_by: [asc: cr.recorded_at, asc: cr.id])`
+  - Apply `apply_cost_filters(query, filters)` — existing function, no changes
+  - Apply `maybe_apply_ecto_cost_cursor(query, cursor)` — new private helper
+  - Apply `maybe_apply_ecto_limit(query, limit)` — new private helper (identical to events version)
+  - Enumerate results with `CostRecordSchema.to_store_struct/1`
+  - Compute `next_cursor = if limit && length(records) == limit, do: encode_cost_cursor(List.last(records)), else: nil`
+  - Return `{:ok, %{records: records, next_cursor: next_cursor}}`
+- Add `encode_cost_cursor/1` and `decode_cost_cursor/1` private helpers
+
+### 3. `lib/phoenix_ai/store/adapters/ets.ex`
+
+- Remove `get_cost_records/2` function and its `@impl` annotation (lines 377–388)
+- Note: ETS key structure `{:cost_record, conversation_id, record_id}` is fine as-is — `sum_cost` already uses `match_object(table, {{:cost_record, :_, :_}, :_})` for global queries; `list_cost_records` uses the same match pattern
+- Add `list_cost_records/2` implementation:
+  - Match all: `:ets.match_object(table, {{:cost_record, :_, :_}, :_})`
+  - Extract records with `Enum.map(fn {_key, r} -> r end)`
+  - Apply `apply_cost_filters(records, filters)` — existing function, no changes
+  - Sort by `{recorded_at, id}` ascending (same comparator as `list_events`)
+  - Apply `maybe_apply_cost_cursor(records, cursor)` — new private helper
+  - Apply `maybe_take(records, limit)` — new private helper (or reuse pattern from events)
+  - Compute `next_cursor`
+  - Return `{:ok, %{records: records, next_cursor: next_cursor}}`
+- Add `encode_cost_cursor/1` and `decode_cost_cursor/1` private helpers
+
+### 4. `lib/phoenix_ai/store.ex`
+
+- Remove `get_cost_records/2` public function (lines 429–444)
+- Add `list_cost_records/2` public function:
+  - Signature: `list_cost_records(filters \\ [], opts \\ [])`
+  - Telemetry span: `[:phoenix_ai_store, :cost, :list_records]`
+  - Feature guard: `function_exported?(adapter, :list_cost_records, 2)`
+  - Error atom when unsupported: `:cost_store_not_supported`
+  - Delegate: `adapter.list_cost_records(filters, adapter_opts)`
+
+### 5. `test/support/cost_store_contract_test.ex`
+
+- Remove `describe "get_cost_records/2"` block
+- Add `describe "list_cost_records/2"` block covering:
+  - Returns `%{records: [], next_cursor: nil}` for no matches
+  - Returns records ordered by `recorded_at` ascending
+  - Filters by `conversation_id` (conversation-scoped, existing semantics)
+  - Filters without `conversation_id` (global dashboard query, new)
+  - Filters by `user_id`, `provider`, `model`, `after`, `before`
+  - Cursor pagination: N records, page size K, yields `ceil(N/K)` pages, all distinct IDs, correct order
+  - `next_cursor` is `nil` on the last page
+
+---
+
+## Build Order
+
+Dependencies determine order. These steps must be sequential:
 
 ```
-1. PhoenixAIStore.converse(conv_id, user_message, opts)
-   │
-2. StorageAdapter.load(conv_id)
-   → returns %Conversation{messages: [...], metadata: %{}}
-   │
-3. Memory.Strategy.apply(conversation.messages, strategy_opts)
-   → trims/summarizes → returns pruned message list
-   │
-4. Guardrails.check(%{conversation: conv, message: user_message, opts: opts})
-   → runs policies in order → {:ok, :pass} | {:error, %PolicyViolation{}}
-   │
-5. [if :pass] PhoenixAI.Agent.prompt(agent, user_message, messages: pruned_messages)
-   OR         AI.chat(provider, pruned_messages ++ [new_message], opts)
-   → returns {:ok, %Response{usage: %Usage{...}, message: %Message{}}}
-   │
-6. StorageAdapter.save(%Conversation{messages: updated_messages})
-   │
-7. CostTracker.record(conversation_id, response.usage, model_info)
-   → persists CostRecord
-   → emits [:phoenix_ai_store, :cost, :recorded]
-   │
-8. EventLog.append(conversation_id, :response_received, %{response: response})
-   │
-9. return {:ok, response}
-```
+Step 1 — Behaviour change
+  adapter.ex: remove get_cost_records/2, add list_cost_records/2
+  ↓ defines the contract both adapters must satisfy
 
-### State Management (InMemory Adapter)
+Step 2a — Ecto adapter (after Step 1)
+  adapters/ecto.ex: implement list_cost_records/2
 
-```
-ETS table: :phoenix_ai_store_conversations
-  key: conversation_id (string UUID)
-  value: %PhoenixAIStore.Conversation{} struct (full struct serialized)
+Step 2b — ETS adapter (after Step 1, parallel with 2a)
+  adapters/ets.ex: implement list_cost_records/2
 
-Read path:  ETS.lookup(table, id) → {:ok, conv} | {:error, :not_found}
-Write path: ETS.insert(table, {id, conv})  (last-write-wins; no transactions)
+Step 3 — Contract test update (can author during Step 2, run after both complete)
+  test/support/cost_store_contract_test.ex: update describe blocks
 
-Concurrent access: ETS is public + read_concurrency: true
-Write safety: serialized through GenServer if write conflicts are a concern
-             (for v1, direct ETS insert is acceptable; single-writer pattern)
-```
+Step 4 — Facade update (after Step 2a + 2b)
+  store.ex: remove get_cost_records/2, add list_cost_records/2
 
-### State Management (Ecto Adapter)
-
-```
-Postgres/SQLite schemas:
-  conversations     (id uuid PK, user_id, metadata jsonb, inserted_at, updated_at)
-  messages          (id, conversation_id FK, role, content, token_count, inserted_at)
-  event_log         (id bigserial PK, conversation_id FK, event_type, payload jsonb, inserted_at)
-  cost_records      (id, conversation_id FK, model, provider, input_tokens, output_tokens, cost_usd, inserted_at)
-
-All reads/writes go through the user-configured Ecto.Repo (same repo as their app).
-Migrations are generated via mix task, not auto-run.
+Step 5 — Full test run
+  mix test — verify all 91 existing tests still pass + new contract tests
 ```
 
 ---
 
-## Anti-Patterns
+## Consistency Matrix Against EventStore
 
-### Anti-Pattern 1: Storing Messages Outside the Conversation Struct
-**What goes wrong:** Separate messages table with join required on every load adds latency and complicates the memory strategy layer.
-**Why bad:** Memory strategies operate on the full ordered message list; requiring a join to assemble it creates a leaky abstraction.
-**Instead:** Store messages as an embedded JSONB array on the conversation row (fast, atomic) OR as a separate table but always load them together via a preload. Embedding is simpler for v1; separate table is better for querying individual messages. Choose one and commit.
+`list_cost_records/2` must be isomorphic to `list_events/2`. Any divergence is a defect.
 
-### Anti-Pattern 2: Putting Persistence Logic Inside the Memory Strategy
-**What goes wrong:** Strategies that write to the DB (e.g., summarization that saves the summary) create coupling between stateless transformation and stateful persistence.
-**Instead:** Strategies return a transformed message list. The Store API decides what to persist. Summarization strategy returns the compressed messages; the API saves them.
-
-### Anti-Pattern 3: Hard-coding the Ecto Repo
-**What goes wrong:** `MyApp.Repo` references scattered through the library code.
-**Instead:** Accept `repo` as config option (Oban pattern). The adapter receives the repo at initialization; the library never imports application code.
-
-### Anti-Pattern 4: Synchronous Telemetry Handlers Blocking the AI Call
-**What goes wrong:** Telemetry handlers run synchronously in the emitter's process. A slow EventLog insert blocks the PhoenixAI response path.
-**Instead:** TelemetryHandler casts to a GenServer (fire-and-forget) or uses Task.start for persistence side effects. The 2024 async telemetry pattern (collect events + periodic batch flush via GenServer timeout) is appropriate for high-throughput scenarios.
-
-### Anti-Pattern 5: Global Mutable Pricing Config
-**What goes wrong:** Application.put_env calls mutating pricing at runtime create race conditions in concurrent environments.
-**Instead:** Pass pricing config via opts at CostTracker.record/3 call site, falling back to compile-time defaults. NimbleOptions validates the schema.
-
-### Anti-Pattern 6: Running Guardrails After the AI Call
-**What goes wrong:** Post-call guardrails cannot prevent spending; they can only detect violations after cost is incurred.
-**Instead:** Guardrails run before the AI call (pre-flight check). Budget guardrails estimate cost from conversation history; actual cost is reconciled post-call.
+| Aspect | EventStore | CostStore (target) |
+|--------|------------|-------------------|
+| Behaviour callback | `list_events(filters, opts)` | `list_cost_records(filters, opts)` |
+| Return map key | `events:` | `records:` |
+| Pagination key | `next_cursor:` | `next_cursor:` |
+| Sort column | `inserted_at` | `recorded_at` |
+| Tiebreaker | `id` | `id` |
+| Cursor tuple | `{inserted_at, id}` | `{recorded_at, id}` |
+| Ecto cursor predicate | `ts > cur OR (ts == cur AND id > cur_id)` | identical |
+| ETS cursor | `Enum.drop_while` with DateTime.compare | identical |
+| Facade feature guard | `function_exported?(..., :list_events, 2)` | `function_exported?(..., :list_cost_records, 2)` |
+| Telemetry span | `[:phoenix_ai_store, :event, :list]` | `[:phoenix_ai_store, :cost, :list_records]` |
 
 ---
 
-## Integration Points
+## Breaking Change Migration Notes
 
-### With PhoenixAI Agent (manage_history: false)
-
-```elixir
-# Start agent with history management disabled
-{:ok, agent} = PhoenixAI.Agent.start_link(
-  provider: :openai,
-  model: "gpt-4o",
-  manage_history: false,   # Store controls history externally
-  system: "You are a helpful assistant."
-)
-
-# Each call passes full managed history
-{:ok, response} = PhoenixAI.Agent.prompt(agent, "Hello",
-  messages: pruned_message_list   # Store-assembled, strategy-applied
-)
-```
-
-This integration requires zero changes to PhoenixAI. The Agent GenServer is stateless per prompt; the Store is the single source of truth for history.
-
-### With AI.chat (stateless calls)
+`Store.get_cost_records/2` is a public API function being removed in v0.3.0. Callers must update:
 
 ```elixir
-# Simpler integration bypassing the Agent GenServer
-{:ok, response} = PhoenixAI.AI.chat(
-  :openai,
-  pruned_message_list ++ [%PhoenixAI.Message{role: :user, content: user_input}],
-  model: "gpt-4o",
-  api_key: key
-)
+# v0.2.x — requires conversation_id, no pagination
+{:ok, records} = Store.get_cost_records(conversation_id, store: :my_store)
+
+# v0.3.0 — conversation_id is an optional filter, returns pagination envelope
+{:ok, %{records: records}} =
+  Store.list_cost_records([conversation_id: conversation_id], store: :my_store)
 ```
 
-### With PhoenixAI Telemetry Events
-
-PhoenixAI emits the following events the TelemetryHandler attaches to:
-- `[:phoenix_ai, :chat, :start | :stop | :exception]`
-- `[:phoenix_ai, :stream, :start | :stop | :exception]`
-- `[:phoenix_ai, :tool_call, :start | :stop | :exception]`
-- `[:phoenix_ai, :pipeline, :start | :stop | :exception]`
-- `[:phoenix_ai, :team, :start | :stop | :exception]`
-
-The Store also emits its own events:
-- `[:phoenix_ai_store, :conversation, :saved]`
-- `[:phoenix_ai_store, :memory, :trimmed]`
-- `[:phoenix_ai_store, :guardrail, :violated]`
-- `[:phoenix_ai_store, :cost, :recorded]`
-- `[:phoenix_ai_store, :event_log, :appended]`
-
-### With User's Application Supervision Tree
-
-```elixir
-# In user's application.ex
-children = [
-  MyApp.Repo,
-  {PhoenixAIStore, adapter: PhoenixAIStore.Adapters.Ecto, repo: MyApp.Repo}
-  # PhoenixAIStore.Supervisor starts only if InMemory adapter is selected
-]
-```
-
-The library's supervision tree is minimal: only the InMemory GenServer (ETS owner) needs to be supervised. The Ecto adapter is stateless and needs no supervised process.
+Internal call audit: `CostTracking.record/3` calls `adapter.save_cost_record/2`, not `get_cost_records` — no change there. The `ConversePipeline` has no cost record reads. The only callers of the old `get_cost_records` are the facade itself and the contract test.
 
 ---
 
-## Suggested Build Order (Component Dependencies)
+## Anti-Patterns to Avoid
 
-Building components in this order respects hard dependencies:
+### Keeping get_cost_records as a deprecated wrapper
 
-```
-Phase 1 — Foundation (no deps on other Store components)
-  1a. Conversation struct + Adapter behaviour
-  1b. InMemory adapter (ETS GenServer)
-  1c. Ecto adapter + schemas + mix gen.migration task
+Adding `list_cost_records/2` and keeping `get_cost_records/2` as a delegating shim permanently doubles the behaviour contract surface. Worse, the shim has a mismatched return type — `[CostRecord.t()]` vs `%{records: [...], next_cursor: ...}` — requiring an unwrap in the shim that hides pagination signal from callers. This is v0.3.0 with a clear breaking change window; remove the old callback entirely.
 
-Phase 2 — Core Pipeline (depends on Phase 1)
-  2a. Memory.Strategy behaviour + SlidingWindow + TokenTruncation
-  2b. Memory.Summarization (depends on having AI.chat integration working)
-  2c. Memory.Pipeline (composes strategies)
+### Cursor and limit in opts rather than filters
 
-Phase 3 — Governance (depends on Phase 1; partially Phase 2 for token counts)
-  3a. Guardrails.Policy behaviour + PolicyViolation struct
-  3b. Built-in policies (TokenBudget, ToolPolicy, ContentFilter first; CostBudget after Phase 4)
-  3c. Guardrails orchestrator (runs stack in order)
+All other pagination callbacks (EventStore) accept `:cursor` and `:limit` in the `filters` keyword, not the second `opts` argument. The second argument is for adapter-level options (`:repo`, `:table`, `:prefix`). Putting pagination state in `opts` breaks this established convention and makes the contract test asymmetric with EventStore.
 
-Phase 4 — Cost Tracking (depends on Phase 1 + Ecto schema + PhoenixAI Usage struct)
-  4a. CostTracker.Pricing table + config
-  4b. CostTracker.record/3 + CostRecord Ecto schema
-  4c. CostBudget policy (depends on 4b for aggregate queries)
+### A separate global_cost_records function
 
-Phase 5 — Event Log (depends on Phase 1 Ecto schemas)
-  5a. EventLog Ecto schema + append/1
-  5b. EventLog query API (cursor pagination)
-  5c. Redaction support
+Adding `global_cost_records/1` for dashboard queries alongside a kept `list_cost_records/2` artificially splits one concern (filtered cost record listing) into two API surface functions. A missing `:conversation_id` filter already means global. One function with optional filters is the right model.
 
-Phase 6 — Telemetry Integration (depends on all above)
-  6a. TelemetryHandler.attach() to [:phoenix_ai, ...] events
-  6b. Store-side [:phoenix_ai_store, ...] event emission
-  6c. Public API converse/2 composing all layers
+### Diverging cursor fields from EventStore
 
-Phase 7 — Polish
-  7a. NimbleOptions validation throughout
-  7b. Dialyzer typespecs
-  7c. Comprehensive docs + usage guide
-```
-
-**Critical path:** Phase 1 → Phase 2 → Phase 6c (converse/2 is usable end-to-end)
-**Blocker:** Phase 4 cannot be finalized until PhoenixAI ships a normalized `Usage` struct (noted as a pending upstream dependency).
+Using a different cursor field (e.g., `id` only, dropping `recorded_at`) would break stable pagination when multiple records share the same timestamp. The `(recorded_at, id)` compound cursor matches how EventStore uses `(inserted_at, id)` — both fields are already indexed by the sort order.
 
 ---
 
 ## Sources
 
-- [Elixir Adapter Pattern — Aaron Renner (2023)](https://aaronrenner.io/2023/07/22/elixir-adapter-pattern.html) — HIGH confidence; comprehensive walkthrough of behaviour/adapter pattern in Elixir
-- [Optional Dependencies in Elixir Libraries — Elixir Forum](https://elixirforum.com/t/is-there-a-guide-for-relying-on-optional-dependencies-in-a-library/37318) — HIGH confidence; community consensus on `Code.ensure_loaded?` pattern
-- [Oban — HexDocs v2.21.1](https://hexdocs.pm/oban/Oban.html) — HIGH confidence; peer dependency / repo injection pattern
-- [Oban GitHub — oban-bg/oban](https://github.com/oban-bg/oban) — HIGH confidence; engine pluggability pattern
-- [NimbleOptions — HexDocs v1.1.1](https://hexdocs.pm/nimble_options/) — HIGH confidence; options validation schema pattern
-- [PhoenixAI.Agent — HexDocs v0.1.0](https://hexdocs.pm/phoenix_ai/PhoenixAI.Agent.html) — HIGH confidence; `manage_history: false` + `messages:` option confirmed
-- [Async Elixir Telemetry — Christian Alexander (2024)](https://christianalexander.com/2024/02/21/async-elixir-telemetry/) — MEDIUM confidence; async telemetry GenServer batch pattern
-- [Telemetry — Phoenix Framework Guides](https://hexdocs.pm/phoenix/telemetry.html) — HIGH confidence; standard attach/4 pattern
-- [ETS vs GenServer State — Elixir Forum](https://elixirforum.com/t/alternative-design-using-ets-tables-to-store-each-genservers-data-instead-of-the-genservers-data-instead-of-the-genservers-state/67528) — MEDIUM confidence; ETS-as-owned-table pattern for concurrent reads
-- [Append-Only Log with Ecto — dwyl/phoenix-ecto-append-only-log-example](https://github.com/dwyl/phoenix-ecto-append-only-log-example) — MEDIUM confidence; immutable event log with Ecto pattern
-- [Writing Extensible Elixir with Behaviours — Darian Moody](https://www.djm.org.uk/posts/writing-extensible-elixir-with-behaviours-adapters-pluggable-backends/) — HIGH confidence; behaviour-based pluggable backend design
-- [Managing Distributed State with GenServers — AppSignal (2024)](https://blog.appsignal.com/2024/10/29/managing-distributed-state-with-genservers-in-phoenix-and-elixir.html) — MEDIUM confidence; GenServer state management patterns
+- Existing `EventStore.list_events/2` in `lib/phoenix_ai/store/adapters/ecto.ex` (lines 529–553) — the reference implementation for cursor pagination
+- Existing `EventStore.list_events/2` in `lib/phoenix_ai/store/adapters/ets.ex` (lines 464–493) — ETS cursor pattern
+- Current `CostStore.get_cost_records/2` in both adapters — the implementation being replaced
+- `Adapter.CostStore` callback definitions in `lib/phoenix_ai/store/adapter.ex` (lines 74–89)
+- `Store.get_cost_records/2` facade in `lib/phoenix_ai/store.ex` (lines 429–444) — facade pattern to update
+- `CostStoreContractTest` in `test/support/cost_store_contract_test.ex` — contract test to update
+- ETS key for cost records confirmed as `{:cost_record, conversation_id, record_id}` — supports global match via `:_` wildcard (verified in `ets.ex` lines 363–374 and `delete_conversation/2` line 103)
