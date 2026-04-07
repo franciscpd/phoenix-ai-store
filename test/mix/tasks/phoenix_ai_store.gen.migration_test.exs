@@ -135,7 +135,10 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
 
     content = File.read!(hd(files))
     assert content =~ "UpgradePhoenixAiStoreV030"
-    assert content =~ "create_if_not_exists index(:phoenix_ai_store_cost_records, [:recorded_at, :id]"
+
+    assert content =~
+             "create_if_not_exists index(:phoenix_ai_store_cost_records, [:recorded_at, :id]"
+
     assert content =~ "cost_records_cursor_idx"
   end
 
