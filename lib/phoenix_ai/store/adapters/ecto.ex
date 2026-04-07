@@ -623,13 +623,11 @@ if Code.ensure_loaded?(Ecto) do
     defp handle_event_result({:error, changeset}), do: {:error, changeset}
 
     defp encode_event_cursor(%Event{} = event) do
-      Base.url_encode64("#{DateTime.to_iso8601(event.inserted_at)}|#{event.id}", padding: false)
+      PhoenixAI.Store.Cursor.encode(event.inserted_at, event.id)
     end
 
     defp decode_event_cursor(cursor) do
-      {:ok, decoded} = Base.url_decode64(cursor, padding: false)
-      [ts_str, id] = String.split(decoded, "|", parts: 2)
-      {:ok, ts, _} = DateTime.from_iso8601(ts_str)
+      {:ok, {ts, id}} = PhoenixAI.Store.Cursor.decode(cursor)
       {ts, id}
     end
   end

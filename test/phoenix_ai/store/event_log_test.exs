@@ -98,7 +98,7 @@ defmodule PhoenixAI.Store.EventLogTest do
       cursor = EventLog.encode_cursor(event)
       assert is_binary(cursor)
 
-      {decoded_ts, decoded_id} = EventLog.decode_cursor(cursor)
+      {:ok, {decoded_ts, decoded_id}} = EventLog.decode_cursor(cursor)
       assert decoded_id == id
       assert DateTime.compare(decoded_ts, now) == :eq
     end

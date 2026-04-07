@@ -46,18 +46,15 @@ defmodule PhoenixAI.Store.EventLog do
   """
   @spec encode_cursor(Event.t()) :: String.t()
   def encode_cursor(%Event{inserted_at: ts, id: id}) do
-    Base.url_encode64("#{DateTime.to_iso8601(ts)}|#{id}", padding: false)
+    PhoenixAI.Store.Cursor.encode(ts, id)
   end
 
   @doc """
-  Decodes a cursor string back into `{DateTime.t(), id}`.
+  Decodes a cursor string back into `{:ok, {DateTime.t(), id}}` or `{:error, :invalid_cursor}`.
   """
-  @spec decode_cursor(String.t()) :: {DateTime.t(), String.t()}
+  @spec decode_cursor(String.t()) :: {:ok, {DateTime.t(), String.t()}} | {:error, :invalid_cursor}
   def decode_cursor(cursor) do
-    {:ok, decoded} = Base.url_decode64(cursor, padding: false)
-    [ts_str, id] = String.split(decoded, "|", parts: 2)
-    {:ok, ts, _} = DateTime.from_iso8601(ts_str)
-    {ts, id}
+    PhoenixAI.Store.Cursor.decode(cursor)
   end
 
   # -- Private --
