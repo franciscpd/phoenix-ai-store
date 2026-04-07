@@ -373,17 +373,69 @@ defmodule PhoenixAI.Store.Adapters.ETS do
     {:ok, record}
   end
 
-  @doc "Returns all cost records for a conversation from ETS, sorted by `recorded_at` ascending."
+  @doc """
+  Queries cost records matching the given filters with cursor-based pagination.
+
+  Note: O(n) full table scan — use the Ecto adapter for production workloads
+  requiring efficient paginated queries over large datasets.
+  """
   @impl PhoenixAI.Store.Adapter.CostStore
-  def get_cost_records(conversation_id, opts) do
+  def list_cost_records(filters, opts) do
     table = Keyword.fetch!(opts, :table)
+    {pagination, filter_opts} = Keyword.split(filters, [:cursor, :limit])
+    cursor = Keyword.get(pagination, :cursor)
+    limit = Keyword.get(pagination, :limit)
 
-    records =
-      :ets.match_object(table, {{:cost_record, conversation_id, :_}, :_})
+    with :ok <- validate_cost_cursor(cursor) do
+      records =
+        case Keyword.get(filter_opts, :conversation_id) do
+          nil -> :ets.match_object(table, {{:cost_record, :_, :_}, :_})
+          conv_id -> :ets.match_object(table, {{:cost_record, conv_id, :_}, :_})
+        end
+        |> Enum.map(fn {_key, record} -> record end)
+        |> apply_cost_filters(Keyword.delete(filter_opts, :conversation_id))
+        |> Enum.sort_by(&{&1.recorded_at, &1.id}, fn {ts1, id1}, {ts2, id2} ->
+          case DateTime.compare(ts1, ts2) do
+            :lt -> true
+            :gt -> false
+            :eq -> id1 < id2
+          end
+        end)
+        |> maybe_apply_cost_cursor(cursor)
+        |> maybe_take_cost(limit)
+
+      next_cursor =
+        if limit && length(records) == limit do
+          last = List.last(records)
+          PhoenixAI.Store.Cursor.encode(last.recorded_at, last.id)
+        else
+          nil
+        end
+
+      {:ok, %{records: records, next_cursor: next_cursor}}
+    end
+  end
+
+  @doc """
+  Counts cost records matching the given filters.
+
+  Note: O(n) — materializes the full filtered list then counts.
+  """
+  @impl PhoenixAI.Store.Adapter.CostStore
+  def count_cost_records(filters, opts) do
+    table = Keyword.fetch!(opts, :table)
+    {_pagination, filter_opts} = Keyword.split(filters, [:cursor, :limit])
+
+    count =
+      case Keyword.get(filter_opts, :conversation_id) do
+        nil -> :ets.match_object(table, {{:cost_record, :_, :_}, :_})
+        conv_id -> :ets.match_object(table, {{:cost_record, conv_id, :_}, :_})
+      end
       |> Enum.map(fn {_key, record} -> record end)
-      |> Enum.sort_by(& &1.recorded_at, {:asc, DateTime})
+      |> apply_cost_filters(Keyword.delete(filter_opts, :conversation_id))
+      |> length()
 
-    {:ok, records}
+    {:ok, count}
   end
 
   @doc "Sums `total_cost` across all cost records matching the given filters in ETS."
@@ -441,6 +493,32 @@ defmodule PhoenixAI.Store.Adapters.ETS do
   end
 
   defp apply_cost_filters(records, [_ | rest]), do: apply_cost_filters(records, rest)
+
+  defp validate_cost_cursor(nil), do: :ok
+
+  defp validate_cost_cursor(cursor) do
+    case PhoenixAI.Store.Cursor.decode(cursor) do
+      {:ok, _} -> :ok
+      {:error, :invalid_cursor} -> {:error, :invalid_cursor}
+    end
+  end
+
+  defp maybe_apply_cost_cursor(records, nil), do: records
+
+  defp maybe_apply_cost_cursor(records, cursor) do
+    {:ok, {cursor_ts, cursor_id}} = PhoenixAI.Store.Cursor.decode(cursor)
+
+    Enum.drop_while(records, fn record ->
+      case DateTime.compare(record.recorded_at, cursor_ts) do
+        :lt -> true
+        :gt -> false
+        :eq -> record.id <= cursor_id
+      end
+    end)
+  end
+
+  defp maybe_take_cost(records, nil), do: records
+  defp maybe_take_cost(records, limit), do: Enum.take(records, limit)
 
   # -- EventStore callbacks --
 
