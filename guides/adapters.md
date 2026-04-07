@@ -179,7 +179,7 @@ runtime via `function_exported?/3` — missing callbacks gracefully degrade.
 | `PhoenixAI.Store.Adapter.FactStore` | Long-term memory facts (save, get, delete, count) |
 | `PhoenixAI.Store.Adapter.ProfileStore` | User profiles (save, load, delete) |
 | `PhoenixAI.Store.Adapter.TokenUsage` | TokenBudget guardrail (sum_conversation_tokens, sum_user_tokens) |
-| `PhoenixAI.Store.Adapter.CostStore` | Cost tracking (save_cost_record, get_cost_records, sum_cost) |
+| `PhoenixAI.Store.Adapter.CostStore` | Cost tracking (save_cost_record, list_cost_records, count_cost_records, sum_cost) |
 | `PhoenixAI.Store.Adapter.EventStore` | Append-only event log (log_event, list_events, count_events) |
 
 Example — implementing `FactStore`:

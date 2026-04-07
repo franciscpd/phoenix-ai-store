@@ -43,7 +43,8 @@ span convention from `:telemetry.span/3`.
 | Event | When emitted |
 |---|---|
 | `[:phoenix_ai_store, :cost, :record]` | `record_cost/3` |
-| `[:phoenix_ai_store, :cost, :get_records]` | `get_cost_records/2` |
+| `[:phoenix_ai_store, :cost, :list_records]` | `list_cost_records/2` |
+| `[:phoenix_ai_store, :cost, :count_records]` | `count_cost_records/2` |
 | `[:phoenix_ai_store, :cost, :sum]` | `sum_cost/2` |
 | `[:phoenix_ai_store, :cost, :recorded]` | Inside `CostTracking.record/3` after a successful persist |
 
@@ -353,7 +354,16 @@ automatically after each successful AI response.
 
 ```elixir
 # All cost records for a conversation
-{:ok, records} = Store.get_cost_records(conv.id, store: :my_store)
+{:ok, %{records: records}} =
+  Store.list_cost_records([conversation_id: conv.id], store: :my_store)
+
+# All cost records globally (dashboard view)
+{:ok, %{records: all_records, next_cursor: cursor}} =
+  Store.list_cost_records([limit: 50], store: :my_store)
+
+# Count records matching filters
+{:ok, count} =
+  Store.count_cost_records([user_id: "user-123"], store: :my_store)
 
 # Aggregate cost by user this month
 {:ok, total} =
@@ -365,7 +375,7 @@ automatically after each successful AI response.
 IO.puts("Monthly spend: $#{Decimal.to_string(total)}")
 ```
 
-Filters supported by `sum_cost/2`:
+Filters supported by `list_cost_records/2`, `count_cost_records/2`, and `sum_cost/2`:
 - `:user_id` — filter by user
 - `:conversation_id` — filter by conversation
 - `:provider` — filter by provider atom (e.g. `:openai`)
