@@ -411,24 +411,54 @@ if Code.ensure_loaded?(Ecto) do
       |> handle_cost_record_result()
     end
 
-    @doc "Queries all cost records for a conversation from the database, ordered by `recorded_at` ascending."
+    @doc """
+    Queries cost records matching the given filters with cursor-based pagination.
+
+    Filters: `:conversation_id`, `:user_id`, `:provider`, `:model`, `:after`, `:before`.
+    Pagination: `:cursor`, `:limit`.
+    """
     @impl PhoenixAI.Store.Adapter.CostStore
-    def get_cost_records(conversation_id, opts) do
-      if valid_uuid?(conversation_id) do
-        repo = Keyword.fetch!(opts, :repo)
+    def list_cost_records(filters, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+      {pagination, filter_opts} = Keyword.split(filters, [:cursor, :limit])
+      limit = Keyword.get(pagination, :limit)
+      cursor = Keyword.get(pagination, :cursor)
+
+      with :ok <- validate_cost_cursor(cursor) do
+        query =
+          from(cr in cost_record_source(opts), order_by: [asc: cr.recorded_at, asc: cr.id])
+          |> apply_cost_filters(filter_opts)
+          |> maybe_apply_cost_cursor(cursor)
+          |> maybe_apply_cost_limit(limit)
 
         records =
-          from(cr in cost_record_source(opts),
-            where: cr.conversation_id == ^conversation_id,
-            order_by: [asc: cr.recorded_at]
-          )
-          |> repo.all()
+          repo.all(query)
           |> Enum.map(&CostRecordSchema.to_store_struct/1)
 
-        {:ok, records}
-      else
-        {:ok, []}
+        next_cursor =
+          if limit && length(records) == limit do
+            last = List.last(records)
+            PhoenixAI.Store.Cursor.encode(last.recorded_at, last.id)
+          else
+            nil
+          end
+
+        {:ok, %{records: records, next_cursor: next_cursor}}
       end
+    end
+
+    @doc "Counts cost records matching the given filters."
+    @impl PhoenixAI.Store.Adapter.CostStore
+    def count_cost_records(filters, opts) do
+      repo = Keyword.fetch!(opts, :repo)
+      {_pagination, filter_opts} = Keyword.split(filters, [:cursor, :limit])
+
+      count =
+        from(cr in cost_record_source(opts), select: count(cr.id))
+        |> apply_cost_filters(filter_opts)
+        |> repo.one()
+
+      {:ok, count}
     end
 
     @doc "Sums `total_cost` across cost records matching the given filters using a database `SUM` aggregate."
@@ -485,6 +515,30 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     defp apply_cost_filters(query, [_ | rest]), do: apply_cost_filters(query, rest)
+
+    defp validate_cost_cursor(nil), do: :ok
+
+    defp validate_cost_cursor(cursor) do
+      case PhoenixAI.Store.Cursor.decode(cursor) do
+        {:ok, _} -> :ok
+        {:error, :invalid_cursor} -> {:error, :invalid_cursor}
+      end
+    end
+
+    defp maybe_apply_cost_cursor(query, nil), do: query
+
+    defp maybe_apply_cost_cursor(query, cursor) do
+      {:ok, {cursor_ts, cursor_id}} = PhoenixAI.Store.Cursor.decode(cursor)
+
+      where(
+        query,
+        [cr],
+        cr.recorded_at > ^cursor_ts or (cr.recorded_at == ^cursor_ts and cr.id > ^cursor_id)
+      )
+    end
+
+    defp maybe_apply_cost_limit(query, nil), do: query
+    defp maybe_apply_cost_limit(query, limit), do: limit(query, ^limit)
 
     defp cost_record_source(opts), do: {cost_record_table_name(opts), CostRecordSchema}
 
