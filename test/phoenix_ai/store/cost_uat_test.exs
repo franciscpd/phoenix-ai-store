@@ -100,8 +100,11 @@ defmodule PhoenixAI.Store.Cost.UATTest do
       {:ok, _} = Store.record_cost(conv_id, response, store: store, user_id: "uat_cost_user")
 
       # Query twice — must return identical Decimal values
-      {:ok, %{records: [record1]}} = Store.list_cost_records([conversation_id: conv_id], store: store)
-      {:ok, %{records: [record2]}} = Store.list_cost_records([conversation_id: conv_id], store: store)
+      {:ok, %{records: [record1]}} =
+        Store.list_cost_records([conversation_id: conv_id], store: store)
+
+      {:ok, %{records: [record2]}} =
+        Store.list_cost_records([conversation_id: conv_id], store: store)
 
       assert Decimal.equal?(record1.total_cost, record2.total_cost)
       assert record1.total_cost == record2.total_cost

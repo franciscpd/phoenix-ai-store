@@ -127,12 +127,7 @@ defmodule PhoenixAI.Store.CostStoreContractTest do
           {:ok, _} = @cost_adapter.save_cost_record(r2, opts)
           {:ok, _} = @cost_adapter.save_cost_record(r3, opts)
 
-          {:ok,
-           conv1: conv1,
-           conv2: conv2,
-           now: now,
-           earlier: earlier,
-           later: later}
+          {:ok, conv1: conv1, conv2: conv2, now: now, earlier: earlier, later: later}
         end
 
         test "returns all records when no filters (ordered by recorded_at)", %{opts: opts} do
