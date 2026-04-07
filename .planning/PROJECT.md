@@ -23,22 +23,14 @@ Conversations persist and restore transparently across process restarts, with me
 - ✓ Streaming support in `converse/3` via `on_chunk` callback and `to` PID options — v0.2.0
 - ✓ Streaming observability — telemetry span and event log metadata capture streaming mode — v0.2.0
 
+- ✓ Filter-based cost record querying with cursor pagination (`list_cost_records/2`) — v0.3.0
+- ✓ Count cost records without loading full records (`count_cost_records/2`) — v0.3.0
+- ✓ Shared cursor module with defensive error handling — v0.3.0
+- ✓ Migration upgrade path for existing installations (`--upgrade` flag) — v0.3.0
+
 ### Active
 
-- [ ] Unify cost record querying into filter-based API (breaking change to CostStore behaviour)
-- [ ] Global cost and event queries for dashboard views without conversation_id
-- [ ] Cursor-based pagination for cost records
-
-## Current Milestone: v0.3.0 Dashboard Queries
-
-**Goal:** Enable global cost and event querying without requiring a conversation_id, so consumers can build dashboard views.
-
-**Target features:**
-- Unify `get_cost_records` into a filter-based API (conversation_id becomes optional filter)
-- Update `CostStore` behaviour callback signature
-- Update both adapters (Ecto + ETS)
-- Add cursor-based pagination for cost records
-- Verify events API filter coverage is sufficient
+(None yet — planning next milestone)
 
 ### Out of Scope
 
@@ -84,6 +76,10 @@ Conversations persist and restore transparently across process restarts, with me
 | Streaming via guard clauses, not NimbleOptions | converse/3 uses Keyword.get — consistency with existing pattern; NimbleOptions migration deferred | ✓ Good |
 | Conflict error for on_chunk + to | Explicit {:error, :conflicting_streaming_options} instead of silent precedence | ✓ Good |
 | TestProvider for streaming tests, not Mox | TestProvider.stream/3 already exists; consistent with existing converse test infrastructure | ✓ Good |
+| Clean break for CostStore API (no deprecation shim) | 0.x semver allows breaking changes; simpler codebase than maintaining compat layer | ✓ Good |
+| Shared Cursor module (EventLog + CostStore) | DRY, defensive decode, single maintenance point; eliminates MatchError crashes on invalid cursors | ✓ Good |
+| Provider filter normalized in facade (not adapters) | Single normalization point; adapters stay pure, receiving atoms always | ✓ Good |
+| Versioned upgrade migration templates (Oban pattern) | Scales with future versions; `--upgrade` discovers templates automatically via wildcard | ✓ Good |
 
 ## Evolution
 
@@ -103,4 +99,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-06 after v0.3.0 milestone start*
+*Last updated: 2026-04-07 after v0.3.0 milestone*

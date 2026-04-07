@@ -1,5 +1,36 @@
 # Milestones
 
+## v0.3.0 — Dashboard Queries
+
+**Shipped:** 2026-04-07
+**Phases:** 2 | **Commits:** 28 | **Tests:** 421
+**Lib:** 5,679 LOC | **Tests:** 4,974 LOC
+
+### Delivered
+
+Filter-based cost record querying with cursor pagination — consumers can build dashboard views without requiring a conversation_id. Breaking change to CostStore behaviour with clean migration path.
+
+### Key Accomplishments
+
+1. `list_cost_records/2` — unified filter-based API replacing `get_cost_records` (breaking change)
+2. `count_cost_records/2` — count matching records without loading full structs
+3. `PhoenixAI.Store.Cursor` — shared cursor module with defensive error handling (used by EventLog + CostStore)
+4. Cursor-based pagination on cost records matching the `list_events` pattern
+5. Provider filter normalization in facade (string→atom via `String.to_existing_atom/1`)
+6. `--upgrade` flag on mix task for existing installations with versioned upgrade templates
+
+### Requirements
+
+10/10 v0.3.0 requirements satisfied (COST×4, ADPT×4, MIGR×2)
+
+### Archive
+
+- [Roadmap](milestones/v0.3.0-ROADMAP.md)
+- [Requirements](milestones/v0.3.0-REQUIREMENTS.md)
+- [Audit](milestones/v0.3.0-MILESTONE-AUDIT.md)
+
+---
+
 ## v0.2.0 — Streaming Support
 
 **Shipped:** 2026-04-06

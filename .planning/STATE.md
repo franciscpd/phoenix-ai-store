@@ -4,12 +4,12 @@ milestone: v0.3.0
 milestone_name: Dashboard Queries
 status: planning
 stopped_at: Phase 12 context gathered
-last_updated: "2026-04-07T00:27:06.179Z"
-last_activity: 2026-04-06 — Roadmap created for v0.3.0 Dashboard Queries
+last_updated: "2026-04-07T00:58:08.048Z"
+last_activity: 2026-04-07
 progress:
   total_phases: 2
   completed_phases: 0
-  total_plans: 1
+  total_plans: 2
   completed_plans: 0
   percent: 0
 ---
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 Phase: 11 of 12 (CostStore Query API)
 Plan: — (not yet planned)
 Status: Ready to plan
-Last activity: 2026-04-06 — Roadmap created for v0.3.0 Dashboard Queries
+Last activity: 2026-04-07
 
 Progress: [░░░░░░░░░░] 0%
 
