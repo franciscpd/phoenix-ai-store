@@ -3,6 +3,8 @@ defmodule PhoenixAI.StoreTest do
 
   alias PhoenixAI.Store
   alias PhoenixAI.Store.{Conversation, Message}
+  alias PhoenixAI.Store.Memory.Pipeline
+  alias PhoenixAI.Store.Memory.Strategies.SlidingWindow
 
   setup do
     name = :"store_test_#{:erlang.unique_integer([:positive])}"
@@ -258,7 +260,7 @@ defmodule PhoenixAI.StoreTest do
       {:ok, _} =
         Store.add_message(conv.id, %Message{role: :assistant, content: "Hi"}, store: store)
 
-      pipeline = PhoenixAI.Store.Memory.Pipeline.preset(:default)
+      pipeline = Pipeline.preset(:default)
       {:ok, result} = Store.apply_memory(conv.id, pipeline, store: store)
 
       assert length(result) == 2
@@ -290,8 +292,8 @@ defmodule PhoenixAI.StoreTest do
 
       # SlidingWindow keeps last 2 non-pinned, but system message is always preserved
       pipeline =
-        PhoenixAI.Store.Memory.Pipeline.new([
-          {PhoenixAI.Store.Memory.Strategies.SlidingWindow, [last: 2]}
+        Pipeline.new([
+          {SlidingWindow, [last: 2]}
         ])
 
       {:ok, result} = Store.apply_memory(conv.id, pipeline, store: store)
@@ -311,8 +313,8 @@ defmodule PhoenixAI.StoreTest do
       {:ok, result} =
         Store.apply_memory(
           conv.id,
-          PhoenixAI.Store.Memory.Pipeline.new([
-            {PhoenixAI.Store.Memory.Strategies.SlidingWindow, [last: 100]}
+          Pipeline.new([
+            {SlidingWindow, [last: 100]}
           ]),
           store: store
         )
@@ -323,7 +325,7 @@ defmodule PhoenixAI.StoreTest do
     test "works with empty conversation", %{store: store} do
       {:ok, conv} = Store.save_conversation(%Conversation{title: "Empty"}, store: store)
 
-      pipeline = PhoenixAI.Store.Memory.Pipeline.preset(:default)
+      pipeline = Pipeline.preset(:default)
       {:ok, result} = Store.apply_memory(conv.id, pipeline, store: store)
 
       assert result == []

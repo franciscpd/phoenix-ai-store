@@ -4,6 +4,7 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
   alias PhoenixAI.Store
   alias PhoenixAI.Store.LongTermMemory
   alias PhoenixAI.Store.LongTermMemory.{Fact, Profile}
+  alias PhoenixAI.Store.Memory.Pipeline
 
   setup do
     store_name = :"ltm_test_#{System.unique_integer([:positive])}"
@@ -265,7 +266,7 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
     end
 
     test "injects facts and profile as pinned messages", %{store: store, conv: conv} do
-      pipeline = PhoenixAI.Store.Memory.Pipeline.preset(:default)
+      pipeline = Pipeline.preset(:default)
 
       {:ok, messages} =
         Store.apply_memory(conv.id, pipeline,
@@ -283,7 +284,7 @@ defmodule PhoenixAI.Store.LongTermMemoryTest do
     end
 
     test "does not inject when option is false", %{store: store, conv: conv} do
-      pipeline = PhoenixAI.Store.Memory.Pipeline.preset(:default)
+      pipeline = Pipeline.preset(:default)
 
       {:ok, messages} =
         Store.apply_memory(conv.id, pipeline, store: store)

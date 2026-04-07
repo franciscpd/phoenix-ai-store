@@ -3,7 +3,8 @@ defmodule PhoenixAI.Store.ConversePipelineTest do
 
   alias PhoenixAI.Providers.TestProvider
   alias PhoenixAI.Store
-  alias PhoenixAI.Store.{Conversation, ConversePipeline, Message}
+  alias PhoenixAI.Store.Adapters.ETS, as: ETSAdapter
+  alias PhoenixAI.Store.{Conversation, ConversePipeline, Instance, Message}
   alias PhoenixAI.Store.Guardrails.TokenBudget
 
   setup do
@@ -18,7 +19,7 @@ defmodule PhoenixAI.Store.ConversePipelineTest do
     end)
 
     name = :"converse_pipeline_test_#{System.unique_integer([:positive])}"
-    {:ok, _} = Store.start_link(name: name, adapter: PhoenixAI.Store.Adapters.ETS)
+    {:ok, _} = Store.start_link(name: name, adapter: ETSAdapter)
 
     {:ok, conv} =
       Store.save_conversation(
@@ -27,9 +28,9 @@ defmodule PhoenixAI.Store.ConversePipelineTest do
       )
 
     context = %{
-      adapter: PhoenixAI.Store.Adapters.ETS,
-      adapter_opts: PhoenixAI.Store.Instance.get_adapter_opts(name),
-      config: PhoenixAI.Store.Instance.get_config(name),
+      adapter: ETSAdapter,
+      adapter_opts: Instance.get_adapter_opts(name),
+      config: Instance.get_config(name),
       provider: :test,
       model: "test-model",
       api_key: "test-key",

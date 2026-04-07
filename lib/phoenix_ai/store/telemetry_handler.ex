@@ -147,18 +147,16 @@ defmodule PhoenixAI.Store.TelemetryHandler do
   end
 
   defp handle_tool_call_stop(metadata, context, _opts) do
-    try do
-      PhoenixAI.Store.log_event(
-        %PhoenixAI.Store.EventLog.Event{
-          type: :tool_called,
-          data: %{tool: metadata[:tool]},
-          conversation_id: context[:conversation_id],
-          user_id: context[:user_id]
-        },
-        store: context[:store]
-      )
-    rescue
-      _ -> :ok
-    end
+    PhoenixAI.Store.log_event(
+      %PhoenixAI.Store.EventLog.Event{
+        type: :tool_called,
+        data: %{tool: metadata[:tool]},
+        conversation_id: context[:conversation_id],
+        user_id: context[:user_id]
+      },
+      store: context[:store]
+    )
+  rescue
+    _ -> :ok
   end
 end

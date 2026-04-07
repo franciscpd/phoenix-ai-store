@@ -22,6 +22,7 @@ defmodule PhoenixAI.Store.CostStoreContractTest do
   """
 
   defmacro __using__(macro_opts) do
+    # credo:disable-for-next-line Credo.Check.Refactor.LongQuoteBlocks
     quote do
       alias PhoenixAI.Store.CostTracking.CostRecord
 

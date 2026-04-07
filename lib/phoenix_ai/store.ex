@@ -29,6 +29,7 @@ defmodule PhoenixAI.Store do
   alias PhoenixAI.Store.CostTracking.CostRecord
   alias PhoenixAI.Store.EventLog
   alias PhoenixAI.Store.EventLog.Event
+  alias PhoenixAI.Store.LongTermMemory.Injector
   alias PhoenixAI.Store.Memory.Pipeline
 
   require Logger
@@ -772,7 +773,7 @@ defmodule PhoenixAI.Store do
           end
         end
 
-      PhoenixAI.Store.LongTermMemory.Injector.inject(facts, profile, messages)
+      Injector.inject(facts, profile, messages)
     else
       messages
     end

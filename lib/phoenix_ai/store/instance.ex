@@ -8,6 +8,8 @@ defmodule PhoenixAI.Store.Instance do
 
   use GenServer
 
+  alias PhoenixAI.Store.Adapters.ETS, as: ETSAdapter
+  alias PhoenixAI.Store.Adapters.ETS.TableOwner
   alias PhoenixAI.Store.Config
 
   # -- Client API --
@@ -59,9 +61,9 @@ defmodule PhoenixAI.Store.Instance do
 
   defp build_adapter_opts(config) do
     case config[:adapter] do
-      PhoenixAI.Store.Adapters.ETS ->
+      ETSAdapter ->
         table_owner_name = :"#{config[:name]}_table_owner"
-        [table: PhoenixAI.Store.Adapters.ETS.TableOwner.table(table_owner_name)]
+        [table: TableOwner.table(table_owner_name)]
 
       _other ->
         Keyword.take(config, [:repo, :prefix, :soft_delete])

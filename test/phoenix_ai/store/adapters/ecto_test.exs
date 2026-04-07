@@ -1,9 +1,12 @@
 defmodule PhoenixAI.Store.Adapters.EctoTest do
   use ExUnit.Case, async: false
 
+  alias Ecto.Adapters.SQL.Sandbox
+  alias PhoenixAI.Store.Test.Repo
+
   setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(PhoenixAI.Store.Test.Repo)
-    {:ok, opts: [repo: PhoenixAI.Store.Test.Repo]}
+    :ok = Sandbox.checkout(Repo)
+    {:ok, opts: [repo: Repo]}
   end
 
   use PhoenixAI.Store.AdapterContractTest, adapter: PhoenixAI.Store.Adapters.Ecto
