@@ -81,10 +81,13 @@ defmodule PhoenixAI.Store.CostStoreContractTest do
         end
       end
 
-      describe "get_cost_records/2" do
-        test "returns records ordered by recorded_at", %{opts: opts} do
-          conv = build_conversation()
-          {:ok, saved_conv} = @adapter.save_conversation(conv, opts)
+      describe "list_cost_records/2" do
+        setup %{opts: opts} do
+          conv1 = build_conversation(%{user_id: "lr_user_a"})
+          {:ok, conv1} = @adapter.save_conversation(conv1, opts)
+
+          conv2 = build_conversation(%{user_id: "lr_user_b"})
+          {:ok, conv2} = @adapter.save_conversation(conv2, opts)
 
           now = DateTime.utc_now()
           earlier = DateTime.add(now, -60, :second)
@@ -92,36 +95,205 @@ defmodule PhoenixAI.Store.CostStoreContractTest do
 
           r1 =
             build_cost_record(%{
-              conversation_id: saved_conv.id,
-              recorded_at: later,
-              model: "gpt-4-later"
+              conversation_id: conv1.id,
+              user_id: "lr_user_a",
+              provider: :openai,
+              model: "gpt-4",
+              total_cost: Decimal.new("0.01"),
+              recorded_at: later
             })
 
           r2 =
             build_cost_record(%{
-              conversation_id: saved_conv.id,
-              recorded_at: earlier,
-              model: "gpt-4-earlier"
+              conversation_id: conv1.id,
+              user_id: "lr_user_a",
+              provider: :anthropic,
+              model: "claude-3",
+              total_cost: Decimal.new("0.02"),
+              recorded_at: earlier
             })
 
           r3 =
             build_cost_record(%{
-              conversation_id: saved_conv.id,
-              recorded_at: now,
-              model: "gpt-4-now"
+              conversation_id: conv2.id,
+              user_id: "lr_user_b",
+              provider: :openai,
+              model: "gpt-3.5",
+              total_cost: Decimal.new("0.005"),
+              recorded_at: now
             })
 
           {:ok, _} = @cost_adapter.save_cost_record(r1, opts)
           {:ok, _} = @cost_adapter.save_cost_record(r2, opts)
           {:ok, _} = @cost_adapter.save_cost_record(r3, opts)
 
-          {:ok, records} = @cost_adapter.get_cost_records(saved_conv.id, opts)
-          assert length(records) == 3
-          assert Enum.map(records, & &1.model) == ["gpt-4-earlier", "gpt-4-now", "gpt-4-later"]
+          {:ok,
+           conv1: conv1,
+           conv2: conv2,
+           now: now,
+           earlier: earlier,
+           later: later}
         end
 
-        test "returns empty list for nonexistent conversation", %{opts: opts} do
-          assert {:ok, []} = @cost_adapter.get_cost_records(Uniq.UUID.uuid7(), opts)
+        test "returns all records when no filters (ordered by recorded_at)", %{opts: opts} do
+          {:ok, %{records: records, next_cursor: nil}} =
+            @cost_adapter.list_cost_records([], opts)
+
+          assert length(records) == 3
+          assert Enum.map(records, & &1.model) == ["claude-3", "gpt-3.5", "gpt-4"]
+        end
+
+        test "filters by conversation_id", %{opts: opts, conv1: conv1} do
+          {:ok, %{records: records}} =
+            @cost_adapter.list_cost_records([conversation_id: conv1.id], opts)
+
+          assert length(records) == 2
+          assert Enum.all?(records, &(&1.conversation_id == conv1.id))
+        end
+
+        test "filters by user_id", %{opts: opts} do
+          {:ok, %{records: records}} =
+            @cost_adapter.list_cost_records([user_id: "lr_user_b"], opts)
+
+          assert length(records) == 1
+          assert hd(records).model == "gpt-3.5"
+        end
+
+        test "filters by provider", %{opts: opts} do
+          {:ok, %{records: records}} =
+            @cost_adapter.list_cost_records([provider: :anthropic], opts)
+
+          assert length(records) == 1
+          assert hd(records).model == "claude-3"
+        end
+
+        test "filters by model", %{opts: opts} do
+          {:ok, %{records: records}} =
+            @cost_adapter.list_cost_records([model: "gpt-4"], opts)
+
+          assert length(records) == 1
+          assert hd(records).provider == :openai
+        end
+
+        test "filters by after date", %{opts: opts, now: now} do
+          {:ok, %{records: records}} =
+            @cost_adapter.list_cost_records([after: now], opts)
+
+          assert length(records) == 2
+        end
+
+        test "filters by before date", %{opts: opts, now: now} do
+          {:ok, %{records: records}} =
+            @cost_adapter.list_cost_records([before: now], opts)
+
+          assert length(records) == 2
+        end
+
+        test "combines multiple filters", %{opts: opts, now: now} do
+          {:ok, %{records: records}} =
+            @cost_adapter.list_cost_records(
+              [user_id: "lr_user_a", provider: :openai, after: now],
+              opts
+            )
+
+          assert length(records) == 1
+          assert hd(records).model == "gpt-4"
+        end
+
+        test "cursor pagination — first page with limit", %{opts: opts} do
+          {:ok, %{records: records, next_cursor: cursor}} =
+            @cost_adapter.list_cost_records([limit: 2], opts)
+
+          assert length(records) == 2
+          assert is_binary(cursor)
+          assert Enum.map(records, & &1.model) == ["claude-3", "gpt-3.5"]
+        end
+
+        test "cursor pagination — second page using cursor", %{opts: opts} do
+          {:ok, %{records: _, next_cursor: cursor}} =
+            @cost_adapter.list_cost_records([limit: 2], opts)
+
+          {:ok, %{records: page2, next_cursor: nil}} =
+            @cost_adapter.list_cost_records([limit: 2, cursor: cursor], opts)
+
+          assert length(page2) == 1
+          assert hd(page2).model == "gpt-4"
+        end
+
+        test "cursor pagination — exhausted returns nil cursor", %{opts: opts} do
+          {:ok, %{records: _, next_cursor: nil}} =
+            @cost_adapter.list_cost_records([limit: 10], opts)
+        end
+
+        test "invalid cursor returns error", %{opts: opts} do
+          assert {:error, :invalid_cursor} =
+                   @cost_adapter.list_cost_records([cursor: "garbage!!!"], opts)
+        end
+
+        test "records with same recorded_at sort stably by id", %{opts: opts} do
+          conv = build_conversation()
+          {:ok, conv} = @adapter.save_conversation(conv, opts)
+
+          same_time = ~U[2026-06-01 00:00:00.000000Z]
+
+          ids =
+            for _ <- 1..3 do
+              id = Uniq.UUID.uuid7()
+
+              record =
+                build_cost_record(%{
+                  id: id,
+                  conversation_id: conv.id,
+                  recorded_at: same_time
+                })
+
+              {:ok, _} = @cost_adapter.save_cost_record(record, opts)
+              id
+            end
+
+          {:ok, %{records: records}} =
+            @cost_adapter.list_cost_records([conversation_id: conv.id, after: same_time], opts)
+
+          returned_ids = Enum.map(records, & &1.id)
+          assert returned_ids == Enum.sort(returned_ids)
+        end
+
+        test "returns empty for no matches", %{opts: opts} do
+          {:ok, %{records: [], next_cursor: nil}} =
+            @cost_adapter.list_cost_records([user_id: "nonexistent_xyz"], opts)
+        end
+      end
+
+      describe "count_cost_records/2" do
+        setup %{opts: opts} do
+          conv = build_conversation(%{user_id: "count_user"})
+          {:ok, conv} = @adapter.save_conversation(conv, opts)
+
+          for i <- 1..3 do
+            record =
+              build_cost_record(%{
+                conversation_id: conv.id,
+                user_id: "count_user",
+                provider: if(rem(i, 2) == 0, do: :anthropic, else: :openai),
+                recorded_at: DateTime.add(DateTime.utc_now(), i, :second)
+              })
+
+            {:ok, _} = @cost_adapter.save_cost_record(record, opts)
+          end
+
+          {:ok, conv: conv}
+        end
+
+        test "counts all records with no filters", %{opts: opts} do
+          {:ok, count} = @cost_adapter.count_cost_records([], opts)
+          assert count >= 3
+        end
+
+        test "counts with filters", %{opts: opts} do
+          {:ok, count} =
+            @cost_adapter.count_cost_records([user_id: "count_user", provider: :openai], opts)
+
+          assert count == 2
         end
       end
 

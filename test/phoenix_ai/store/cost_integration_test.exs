@@ -71,14 +71,16 @@ defmodule PhoenixAI.Store.CostIntegrationTest do
     end
   end
 
-  describe "get_cost_records/2" do
+  describe "list_cost_records/2" do
     test "returns all recorded costs for a conversation", %{conv: conv} do
       response = build_response()
 
       {:ok, _} = Store.record_cost(conv.id, response, store: @store_name, user_id: "user-cost-1")
       {:ok, _} = Store.record_cost(conv.id, response, store: @store_name, user_id: "user-cost-1")
 
-      assert {:ok, records} = Store.get_cost_records(conv.id, store: @store_name)
+      assert {:ok, %{records: records}} =
+               Store.list_cost_records([conversation_id: conv.id], store: @store_name)
+
       assert length(records) == 2
       assert Enum.all?(records, &match?(%CostRecord{}, &1))
     end

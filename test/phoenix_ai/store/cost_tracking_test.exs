@@ -13,7 +13,10 @@ defmodule PhoenixAI.Store.CostTrackingTest do
     def save_cost_record(record, _opts), do: {:ok, record}
 
     @impl true
-    def get_cost_records(_conv_id, _opts), do: {:ok, []}
+    def list_cost_records(_filters, _opts), do: {:ok, %{records: [], next_cursor: nil}}
+
+    @impl true
+    def count_cost_records(_filters, _opts), do: {:ok, 0}
 
     @impl true
     def sum_cost(_filters, _opts), do: {:ok, Decimal.new(0)}

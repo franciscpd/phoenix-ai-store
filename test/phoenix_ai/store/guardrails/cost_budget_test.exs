@@ -13,7 +13,10 @@ defmodule PhoenixAI.Store.Guardrails.CostBudgetTest do
     def save_cost_record(r, _), do: {:ok, r}
 
     @impl true
-    def get_cost_records(_, _), do: {:ok, []}
+    def list_cost_records(_, _), do: {:ok, %{records: [], next_cursor: nil}}
+
+    @impl true
+    def count_cost_records(_, _), do: {:ok, 0}
 
     @impl true
     def sum_cost(filters, _opts) do
