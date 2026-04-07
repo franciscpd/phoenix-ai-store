@@ -1,0 +1,9 @@
+defmodule <%= @repo_module %>.Migrations.Upgrade<%= @migration_module %>V030 do
+  use Ecto.Migration
+
+  def change do
+    # v0.3.0: Composite index for cursor-based pagination on cost_records
+    create_if_not_exists index(:<%= @prefix %>cost_records, [:recorded_at, :id],
+      name: :<%= @prefix %>cost_records_cursor_idx)
+  end
+end
