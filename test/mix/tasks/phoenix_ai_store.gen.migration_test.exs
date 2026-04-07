@@ -120,4 +120,68 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
     files_after = Path.wildcard(Path.join(@tmp_dir, "*.exs"))
     assert length(files_after) == 1
   end
+
+  test "generates upgrade migration with --upgrade" do
+    capture_io(fn ->
+      Mix.Tasks.PhoenixAiStore.Gen.Migration.run([
+        "--migrations-path",
+        @tmp_dir,
+        "--upgrade"
+      ])
+    end)
+
+    files = Path.wildcard(Path.join(@tmp_dir, "*_upgrade_phoenix_ai_store_v030.exs"))
+    assert length(files) == 1
+
+    content = File.read!(hd(files))
+    assert content =~ "UpgradePhoenixAiStoreV030"
+    assert content =~ "create_if_not_exists index(:phoenix_ai_store_cost_records, [:recorded_at, :id]"
+    assert content =~ "cost_records_cursor_idx"
+  end
+
+  test "--upgrade is idempotent" do
+    capture_io(fn ->
+      Mix.Tasks.PhoenixAiStore.Gen.Migration.run([
+        "--migrations-path",
+        @tmp_dir,
+        "--upgrade"
+      ])
+    end)
+
+    files_before = Path.wildcard(Path.join(@tmp_dir, "*_upgrade_*.exs"))
+    assert length(files_before) == 1
+
+    output =
+      capture_io(fn ->
+        Mix.Tasks.PhoenixAiStore.Gen.Migration.run([
+          "--migrations-path",
+          @tmp_dir,
+          "--upgrade"
+        ])
+      end)
+
+    assert output =~ "already exists"
+
+    files_after = Path.wildcard(Path.join(@tmp_dir, "*_upgrade_*.exs"))
+    assert length(files_after) == 1
+  end
+
+  test "--upgrade with custom prefix" do
+    capture_io(fn ->
+      Mix.Tasks.PhoenixAiStore.Gen.Migration.run([
+        "--migrations-path",
+        @tmp_dir,
+        "--upgrade",
+        "--prefix",
+        "my_ai_"
+      ])
+    end)
+
+    files = Path.wildcard(Path.join(@tmp_dir, "*_upgrade_my_ai_v030.exs"))
+    assert length(files) == 1
+
+    content = File.read!(hd(files))
+    assert content =~ "UpgradeMyAiV030"
+    assert content =~ "create_if_not_exists index(:my_ai_cost_records"
+  end
 end
