@@ -422,19 +422,56 @@ defmodule PhoenixAI.Store do
   end
 
   @doc """
-  Returns all cost records for a conversation.
+  Lists cost records matching the given filters with cursor pagination.
 
-  Delegates to `adapter.get_cost_records/2` if the adapter supports CostStore.
+  Delegates to `adapter.list_cost_records/2` if the adapter supports CostStore.
+
+  ## Filters
+
+    * `:conversation_id` — filter by conversation
+    * `:user_id` — filter by user
+    * `:provider` — filter by provider (atom or string — normalized to atom)
+    * `:model` — filter by model string (e.g. `"gpt-4o"`)
+    * `:after` — include only records with `recorded_at >= dt`
+    * `:before` — include only records with `recorded_at <= dt`
+    * `:cursor` — opaque cursor from previous page
+    * `:limit` — max records per page
   """
-  @spec get_cost_records(String.t(), keyword()) ::
-          {:ok, [CostRecord.t()]} | {:error, term()}
-  def get_cost_records(conversation_id, opts \\ []) do
-    :telemetry.span([:phoenix_ai_store, :cost, :get_records], %{}, fn ->
+  @spec list_cost_records(keyword(), keyword()) ::
+          {:ok, %{records: [CostRecord.t()], next_cursor: String.t() | nil}}
+          | {:error, term()}
+  def list_cost_records(filters \\ [], opts \\ []) do
+    :telemetry.span([:phoenix_ai_store, :cost, :list_records], %{}, fn ->
       {adapter, adapter_opts, _config} = resolve_adapter(opts)
+      filters = normalize_provider_filter(filters)
 
       result =
-        if function_exported?(adapter, :get_cost_records, 2) do
-          adapter.get_cost_records(conversation_id, adapter_opts)
+        if function_exported?(adapter, :list_cost_records, 2) do
+          adapter.list_cost_records(filters, adapter_opts)
+        else
+          {:error, :cost_store_not_supported}
+        end
+
+      {result, %{}}
+    end)
+  end
+
+  @doc """
+  Counts cost records matching the given filters.
+
+  Delegates to `adapter.count_cost_records/2` if the adapter supports CostStore.
+  Accepts the same filters as `list_cost_records/2` (excluding `:cursor` and `:limit`).
+  """
+  @spec count_cost_records(keyword(), keyword()) ::
+          {:ok, non_neg_integer()} | {:error, term()}
+  def count_cost_records(filters \\ [], opts \\ []) do
+    :telemetry.span([:phoenix_ai_store, :cost, :count_records], %{}, fn ->
+      {adapter, adapter_opts, _config} = resolve_adapter(opts)
+      filters = normalize_provider_filter(filters)
+
+      result =
+        if function_exported?(adapter, :count_cost_records, 2) do
+          adapter.count_cost_records(filters, adapter_opts)
         else
           {:error, :cost_store_not_supported}
         end
@@ -738,6 +775,14 @@ defmodule PhoenixAI.Store do
       PhoenixAI.Store.LongTermMemory.Injector.inject(facts, profile, messages)
     else
       messages
+    end
+  end
+
+  defp normalize_provider_filter(filters) do
+    case Keyword.get(filters, :provider) do
+      nil -> filters
+      p when is_atom(p) -> filters
+      p when is_binary(p) -> Keyword.put(filters, :provider, String.to_existing_atom(p))
     end
   end
 
