@@ -25,5 +25,7 @@ defmodule <%= @repo_module %>.Migrations.Add<%= @migration_module %>CostTables d
     create index(:<%= @prefix %>cost_records, [:user_id])
     create index(:<%= @prefix %>cost_records, [:recorded_at])
     create index(:<%= @prefix %>cost_records, [:user_id, :recorded_at])
+    create index(:<%= @prefix %>cost_records, [:recorded_at, :id],
+      name: :<%= @prefix %>cost_records_cursor_idx)
   end
 end

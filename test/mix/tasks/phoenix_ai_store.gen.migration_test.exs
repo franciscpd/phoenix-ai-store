@@ -81,6 +81,27 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
     assert content =~ "create index(:my_ai_messages, [:conversation_id])"
   end
 
+  test "generates cost migration with cursor index" do
+    capture_io(fn ->
+      Mix.Tasks.PhoenixAiStore.Gen.Migration.run([
+        "--migrations-path",
+        @tmp_dir,
+        "--cost"
+      ])
+    end)
+
+    [file] = Path.wildcard(Path.join(@tmp_dir, "*_add_phoenix_ai_store_cost_tables.exs"))
+    content = File.read!(file)
+
+    assert content =~ "create table(:phoenix_ai_store_cost_records, primary_key: false)"
+    assert content =~ "create index(:phoenix_ai_store_cost_records, [:conversation_id])"
+    assert content =~ "create index(:phoenix_ai_store_cost_records, [:user_id])"
+    assert content =~ "create index(:phoenix_ai_store_cost_records, [:recorded_at])"
+    assert content =~ "create index(:phoenix_ai_store_cost_records, [:user_id, :recorded_at])"
+    assert content =~ "create index(:phoenix_ai_store_cost_records, [:recorded_at, :id]"
+    assert content =~ "cost_records_cursor_idx"
+  end
+
   test "is idempotent (second run skips)" do
     capture_io(fn ->
       Mix.Tasks.PhoenixAiStore.Gen.Migration.run(["--migrations-path", @tmp_dir])
