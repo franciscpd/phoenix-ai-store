@@ -1,8 +1,8 @@
 defmodule PhoenixAI.Store.InstanceTest do
   use ExUnit.Case, async: true
 
-  alias PhoenixAI.Store.Instance
   alias PhoenixAI.Store.Adapters.ETS.TableOwner
+  alias PhoenixAI.Store.Instance
 
   describe "start_link/1 with ETS adapter" do
     setup do

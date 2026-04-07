@@ -21,15 +21,15 @@ defmodule PhoenixAI.Store do
 
   use Supervisor
 
-  alias PhoenixAI.Store.{Config, Conversation, Instance, Message}
-  alias PhoenixAI.Store.ConversePipeline
   alias PhoenixAI.Guardrails.Pipeline, as: GuardrailsPipeline
   alias PhoenixAI.Guardrails.{PolicyViolation, Request}
-  alias PhoenixAI.Store.Memory.Pipeline
+  alias PhoenixAI.Store.{Config, Conversation, Instance, Message}
+  alias PhoenixAI.Store.ConversePipeline
   alias PhoenixAI.Store.CostTracking
   alias PhoenixAI.Store.CostTracking.CostRecord
   alias PhoenixAI.Store.EventLog
   alias PhoenixAI.Store.EventLog.Event
+  alias PhoenixAI.Store.Memory.Pipeline
 
   require Logger
 

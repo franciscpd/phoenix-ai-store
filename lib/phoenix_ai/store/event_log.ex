@@ -14,6 +14,7 @@ defmodule PhoenixAI.Store.EventLog do
   5. Persist through adapter, wrapped in a telemetry span
   """
 
+  alias PhoenixAI.Store.Cursor
   alias PhoenixAI.Store.EventLog.Event
 
   @doc """
@@ -46,7 +47,7 @@ defmodule PhoenixAI.Store.EventLog do
   """
   @spec encode_cursor(Event.t()) :: String.t()
   def encode_cursor(%Event{inserted_at: ts, id: id}) do
-    PhoenixAI.Store.Cursor.encode(ts, id)
+    Cursor.encode(ts, id)
   end
 
   @doc """
@@ -54,7 +55,7 @@ defmodule PhoenixAI.Store.EventLog do
   """
   @spec decode_cursor(String.t()) :: {:ok, {DateTime.t(), String.t()}} | {:error, :invalid_cursor}
   def decode_cursor(cursor) do
-    PhoenixAI.Store.Cursor.decode(cursor)
+    Cursor.decode(cursor)
   end
 
   # -- Private --

@@ -19,15 +19,16 @@ if Code.ensure_loaded?(Ecto) do
     import Ecto.Query
 
     alias PhoenixAI.Store.{Conversation, Message}
-    alias PhoenixAI.Store.Schemas.Conversation, as: ConvSchema
-    alias PhoenixAI.Store.Schemas.Message, as: MsgSchema
-    alias PhoenixAI.Store.LongTermMemory.{Fact, Profile}
-    alias PhoenixAI.Store.Schemas.Fact, as: FactSchema
-    alias PhoenixAI.Store.Schemas.Profile, as: ProfileSchema
     alias PhoenixAI.Store.CostTracking.CostRecord
-    alias PhoenixAI.Store.Schemas.CostRecord, as: CostRecordSchema
+    alias PhoenixAI.Store.Cursor
     alias PhoenixAI.Store.EventLog.Event
+    alias PhoenixAI.Store.LongTermMemory.{Fact, Profile}
+    alias PhoenixAI.Store.Schemas.Conversation, as: ConvSchema
+    alias PhoenixAI.Store.Schemas.CostRecord, as: CostRecordSchema
     alias PhoenixAI.Store.Schemas.Event, as: EventSchema
+    alias PhoenixAI.Store.Schemas.Fact, as: FactSchema
+    alias PhoenixAI.Store.Schemas.Message, as: MsgSchema
+    alias PhoenixAI.Store.Schemas.Profile, as: ProfileSchema
 
     @doc "Inserts or updates a conversation row in the database via the configured Repo."
     @impl true
@@ -438,7 +439,7 @@ if Code.ensure_loaded?(Ecto) do
         next_cursor =
           if limit && length(records) == limit do
             last = List.last(records)
-            PhoenixAI.Store.Cursor.encode(last.recorded_at, last.id)
+            Cursor.encode(last.recorded_at, last.id)
           else
             nil
           end
@@ -519,7 +520,7 @@ if Code.ensure_loaded?(Ecto) do
     defp validate_cost_cursor(nil), do: :ok
 
     defp validate_cost_cursor(cursor) do
-      case PhoenixAI.Store.Cursor.decode(cursor) do
+      case Cursor.decode(cursor) do
         {:ok, _} -> :ok
         {:error, :invalid_cursor} -> {:error, :invalid_cursor}
       end
@@ -528,7 +529,7 @@ if Code.ensure_loaded?(Ecto) do
     defp maybe_apply_cost_cursor(query, nil), do: query
 
     defp maybe_apply_cost_cursor(query, cursor) do
-      {:ok, {cursor_ts, cursor_id}} = PhoenixAI.Store.Cursor.decode(cursor)
+      {:ok, {cursor_ts, cursor_id}} = Cursor.decode(cursor)
 
       where(
         query,
@@ -677,11 +678,11 @@ if Code.ensure_loaded?(Ecto) do
     defp handle_event_result({:error, changeset}), do: {:error, changeset}
 
     defp encode_event_cursor(%Event{} = event) do
-      PhoenixAI.Store.Cursor.encode(event.inserted_at, event.id)
+      Cursor.encode(event.inserted_at, event.id)
     end
 
     defp decode_event_cursor(cursor) do
-      {:ok, {ts, id}} = PhoenixAI.Store.Cursor.decode(cursor)
+      {:ok, {ts, id}} = Cursor.decode(cursor)
       {ts, id}
     end
   end

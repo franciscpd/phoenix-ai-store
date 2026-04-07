@@ -1,10 +1,10 @@
 defmodule PhoenixAI.Store.CostIntegrationTest do
   use ExUnit.Case, async: false
 
+  alias PhoenixAI.Guardrails.{PolicyViolation, Request}
   alias PhoenixAI.Store
   alias PhoenixAI.Store.Conversation
   alias PhoenixAI.Store.CostTracking.CostRecord
-  alias PhoenixAI.Guardrails.{PolicyViolation, Request}
   alias PhoenixAI.Store.Guardrails.CostBudget
 
   @store_name :cost_integration_test_store

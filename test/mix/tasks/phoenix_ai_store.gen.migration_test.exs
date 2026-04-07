@@ -2,6 +2,8 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
   use ExUnit.Case
   import ExUnit.CaptureIO
 
+  alias Mix.Tasks.PhoenixAiStore.Gen.Migration
+
   @tmp_dir "tmp/test_migrations"
 
   setup do
@@ -14,7 +16,7 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
   test "generates migration file with correct content" do
     output =
       capture_io(fn ->
-        Mix.Tasks.PhoenixAiStore.Gen.Migration.run(["--migrations-path", @tmp_dir])
+        Migration.run(["--migrations-path", @tmp_dir])
       end)
 
     assert output =~ "creating"
@@ -63,7 +65,7 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
 
   test "generates with custom prefix" do
     capture_io(fn ->
-      Mix.Tasks.PhoenixAiStore.Gen.Migration.run([
+      Migration.run([
         "--migrations-path",
         @tmp_dir,
         "--prefix",
@@ -83,7 +85,7 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
 
   test "generates cost migration with cursor index" do
     capture_io(fn ->
-      Mix.Tasks.PhoenixAiStore.Gen.Migration.run([
+      Migration.run([
         "--migrations-path",
         @tmp_dir,
         "--cost"
@@ -104,7 +106,7 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
 
   test "is idempotent (second run skips)" do
     capture_io(fn ->
-      Mix.Tasks.PhoenixAiStore.Gen.Migration.run(["--migrations-path", @tmp_dir])
+      Migration.run(["--migrations-path", @tmp_dir])
     end)
 
     files_before = Path.wildcard(Path.join(@tmp_dir, "*.exs"))
@@ -112,7 +114,7 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
 
     output =
       capture_io(fn ->
-        Mix.Tasks.PhoenixAiStore.Gen.Migration.run(["--migrations-path", @tmp_dir])
+        Migration.run(["--migrations-path", @tmp_dir])
       end)
 
     assert output =~ "already exists"
@@ -123,7 +125,7 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
 
   test "generates upgrade migration with --upgrade" do
     capture_io(fn ->
-      Mix.Tasks.PhoenixAiStore.Gen.Migration.run([
+      Migration.run([
         "--migrations-path",
         @tmp_dir,
         "--upgrade"
@@ -144,7 +146,7 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
 
   test "--upgrade is idempotent" do
     capture_io(fn ->
-      Mix.Tasks.PhoenixAiStore.Gen.Migration.run([
+      Migration.run([
         "--migrations-path",
         @tmp_dir,
         "--upgrade"
@@ -156,7 +158,7 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
 
     output =
       capture_io(fn ->
-        Mix.Tasks.PhoenixAiStore.Gen.Migration.run([
+        Migration.run([
           "--migrations-path",
           @tmp_dir,
           "--upgrade"
@@ -171,7 +173,7 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.MigrationTest do
 
   test "--upgrade with custom prefix" do
     capture_io(fn ->
-      Mix.Tasks.PhoenixAiStore.Gen.Migration.run([
+      Migration.run([
         "--migrations-path",
         @tmp_dir,
         "--upgrade",

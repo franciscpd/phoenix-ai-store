@@ -21,9 +21,10 @@ defmodule PhoenixAI.Store.Adapters.ETS do
   @behaviour PhoenixAI.Store.Adapter.EventStore
 
   alias PhoenixAI.Store.{Conversation, Message}
-  alias PhoenixAI.Store.LongTermMemory.{Fact, Profile}
   alias PhoenixAI.Store.CostTracking.CostRecord
+  alias PhoenixAI.Store.Cursor
   alias PhoenixAI.Store.EventLog.Event
+  alias PhoenixAI.Store.LongTermMemory.{Fact, Profile}
 
   @doc "Inserts or updates a conversation in the ETS table, preserving `inserted_at` on upsert."
   @impl true
@@ -407,7 +408,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
       next_cursor =
         if limit && length(records) == limit do
           last = List.last(records)
-          PhoenixAI.Store.Cursor.encode(last.recorded_at, last.id)
+          Cursor.encode(last.recorded_at, last.id)
         else
           nil
         end
@@ -497,7 +498,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
   defp validate_cost_cursor(nil), do: :ok
 
   defp validate_cost_cursor(cursor) do
-    case PhoenixAI.Store.Cursor.decode(cursor) do
+    case Cursor.decode(cursor) do
       {:ok, _} -> :ok
       {:error, :invalid_cursor} -> {:error, :invalid_cursor}
     end
@@ -506,7 +507,7 @@ defmodule PhoenixAI.Store.Adapters.ETS do
   defp maybe_apply_cost_cursor(records, nil), do: records
 
   defp maybe_apply_cost_cursor(records, cursor) do
-    {:ok, {cursor_ts, cursor_id}} = PhoenixAI.Store.Cursor.decode(cursor)
+    {:ok, {cursor_ts, cursor_id}} = Cursor.decode(cursor)
 
     Enum.drop_while(records, fn record ->
       case DateTime.compare(record.recorded_at, cursor_ts) do
@@ -638,11 +639,11 @@ defmodule PhoenixAI.Store.Adapters.ETS do
   defp maybe_take(events, limit), do: Enum.take(events, limit)
 
   defp encode_event_cursor(%Event{} = event) do
-    PhoenixAI.Store.Cursor.encode(event.inserted_at, event.id)
+    Cursor.encode(event.inserted_at, event.id)
   end
 
   defp decode_event_cursor(cursor) do
-    {:ok, {ts, id}} = PhoenixAI.Store.Cursor.decode(cursor)
+    {:ok, {ts, id}} = Cursor.decode(cursor)
     {ts, id}
   end
 end
