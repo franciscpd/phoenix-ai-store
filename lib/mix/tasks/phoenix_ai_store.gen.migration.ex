@@ -18,6 +18,10 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
 
       $ mix phoenix_ai_store.gen.migration --events
 
+  For existing installations upgrading to a new version:
+
+      $ mix phoenix_ai_store.gen.migration --upgrade
+
   ## Options
 
     * `--prefix` - Table name prefix (default: `phoenix_ai_store_`)
@@ -25,6 +29,7 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
     * `--ltm` - Generate only the Long-Term Memory tables (facts, profiles)
     * `--cost` - Generate only the Cost Tracking tables (cost_records)
     * `--events` - Generate only the Event Log tables (events)
+    * `--upgrade` - Generate pending upgrade migrations for existing installations
 
   """
 
@@ -42,7 +47,8 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
           migrations_path: :string,
           ltm: :boolean,
           cost: :boolean,
-          events: :boolean
+          events: :boolean,
+          upgrade: :boolean
         ]
       )
 
@@ -51,6 +57,7 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
     ltm_only = Keyword.get(opts, :ltm, false)
     cost_only = Keyword.get(opts, :cost, false)
     events_only = Keyword.get(opts, :events, false)
+    upgrade = Keyword.get(opts, :upgrade, false)
 
     File.mkdir_p!(migrations_path)
 
@@ -65,6 +72,9 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
 
       events_only ->
         generate_events_migration(prefix, slug, migrations_path)
+
+      upgrade ->
+        generate_upgrade_migrations(prefix, slug, migrations_path)
 
       true ->
         existing =
@@ -221,6 +231,68 @@ defmodule Mix.Tasks.PhoenixAiStore.Gen.Migration do
 
   defp fallback_ltm_template_path do
     Path.join([File.cwd!(), "priv", "templates", "ltm_migration.exs.eex"])
+  end
+
+  defp generate_upgrade_migrations(prefix, slug, migrations_path) do
+    templates_dir = find_templates_dir()
+
+    upgrade_templates =
+      Path.wildcard(Path.join(templates_dir, "upgrade_v*_migration.exs.eex"))
+      |> Enum.sort()
+
+    if upgrade_templates == [] do
+      Mix.shell().info("No upgrade migrations available.")
+      :ok
+    else
+      migration_module = module_from_prefix(prefix)
+      repo_module = detect_repo_module()
+      assigns = [prefix: prefix, migration_module: migration_module, repo_module: repo_module]
+
+      generated =
+        Enum.reduce(upgrade_templates, 0, fn template_path, count ->
+          version = extract_version(template_path)
+          pattern = "*_upgrade_#{slug}_#{version}.exs"
+          existing = Path.wildcard(Path.join(migrations_path, pattern))
+
+          if existing != [] do
+            Mix.shell().info("Upgrade #{version} already exists: #{hd(existing)}")
+            count
+          else
+            timestamp = generate_timestamp()
+            content = EEx.eval_file(template_path, assigns: assigns)
+            filename = "#{timestamp}_upgrade_#{slug}_#{version}.exs"
+            filepath = Path.join(migrations_path, filename)
+            Mix.Generator.create_file(filepath, content)
+            count + 1
+          end
+        end)
+
+      if generated == 0 do
+        Mix.shell().info("All upgrade migrations already generated.")
+      end
+
+      :ok
+    end
+  end
+
+  defp extract_version(template_path) do
+    template_path
+    |> Path.basename(".exs.eex")
+    |> String.replace("upgrade_", "")
+    |> String.replace("_migration", "")
+  end
+
+  defp find_templates_dir do
+    case Application.app_dir(:phoenix_ai_store, "priv/templates") do
+      path when is_binary(path) ->
+        if File.dir?(path), do: path, else: fallback_templates_dir()
+    end
+  rescue
+    _ -> fallback_templates_dir()
+  end
+
+  defp fallback_templates_dir do
+    Path.join([File.cwd!(), "priv", "templates"])
   end
 
   defp generate_timestamp do
