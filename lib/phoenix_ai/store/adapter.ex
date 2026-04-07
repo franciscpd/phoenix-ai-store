@@ -81,8 +81,12 @@ defmodule PhoenixAI.Store.Adapter do
     @callback save_cost_record(CostRecord.t(), keyword()) ::
                 {:ok, CostRecord.t()} | {:error, term()}
 
-    @callback get_cost_records(conversation_id :: String.t(), keyword()) ::
-                {:ok, [CostRecord.t()]} | {:error, term()}
+    @callback list_cost_records(filters :: keyword(), keyword()) ::
+                {:ok, %{records: [CostRecord.t()], next_cursor: String.t() | nil}}
+                | {:error, term()}
+
+    @callback count_cost_records(filters :: keyword(), keyword()) ::
+                {:ok, non_neg_integer()}
 
     @callback sum_cost(filters :: keyword(), keyword()) ::
                 {:ok, Decimal.t()} | {:error, term()}
